@@ -150,6 +150,9 @@ int main(){
     err = 0;
 
     getsym();
+    if (sym == main_sym) getsym();
+    else error(300);
+
     addset(nxtlev, declbegsys, statbegsys, SYM_CNT);
     nxtlev[end_sym] = true;
 
