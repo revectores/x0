@@ -1,0 +1,973 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+
+#define NROW 13
+#define TXMAX 100
+#define NMAX 14
+#define AL 10
+#define MAXERR 30
+#define MAX_ADDR 2048
+#define MAX_LEVEL 3
+#define MAX_CX 200
+#define STACK_SIZE 500
+
+enum symbol {
+    nul,       ident,    number,    plus,     minus,
+    times,     slash,    odd_sym,   eql,      neq,
+    lss,       geq,      gtr,       leq,      lparen,
+    rparen,    comma,    semicolon, period,   becomes,
+    begin_sym, end_sym,  if_sym,    then_sym, while_sym,
+    write_sym, read_sym, do_sym,    call_sym, const_sym,
+    var_sym,   proc_sym, main_sym,  void_sym,
+};
+#define SYM_CNT 32
+
+enum object {
+    constant, variable, procedure
+};
+
+enum fct {
+    lit, opr, lod, sto, cal, ini, jmp, jpc
+};
+#define FCT_CNT 8
+
+struct instruction {
+    enum fct f;
+    int l;
+    int a;
+};
+
+bool list_switch;
+bool table_switch;
+char ch;
+enum symbol sym;
+char id[AL + 1];
+int num;
+int cc, ll;
+int cx;
+char line[81];
+char A[AL + 1];
+struct instruction code[MAX_CX];
+char word[NROW][AL];
+enum symbol wsym[NROW];
+enum symbol ssym[256];
+char mnemonic[FCT_CNT][5];
+bool declbegsys[SYM_CNT];
+bool statbegsys[SYM_CNT];
+bool factbegsys[SYM_CNT];
+
+struct table_struct {
+    char name[AL];
+    enum object kind;
+    int val;
+    int level;
+    int adr;
+    int size;
+};
+
+struct table_struct table[TXMAX];
+
+FILE* fin;
+FILE* ftable;
+FILE* fcode;
+FILE* fout;
+FILE* fresult;
+char fname[AL];
+int err;
+
+
+void error(int n);
+void getsym();
+void getch();
+void init();
+void gen(enum fct f, int l, int a);
+void interpret();
+void test(bool *s1, bool *s2, int n);
+int inset(int e, const bool *s);
+int addset(bool *sr, const bool *s1, const bool *s2, int n);
+int subset(bool *sr, const bool *s1, const bool *s2, int n);
+int mulset(bool *sr, const bool *s1, const bool *s2, int n);
+void list_code(int cx0);
+void list_all();
+int position(char *idt, int tx);
+void enter(enum object k, int *ptx, int lev, int *pdx);
+int base(int l, int *s, int b);
+
+void block(int lev, int tx, bool *fsys);
+void statement(bool *fsys, int *ptx, int lev);
+void expression(bool *fsys, int *ptx, int lev);
+void condition(bool *fsys, int *ptx, int lev);
+void term(bool *fsys, int *ptx, int lev);
+void factor(bool *fsys, int *ptx, int lev);
+void var_decl(int *ptx, int lev, int *pdx);
+void const_decl(int *ptx, int lev, int *pdx);
+
+
+
+
+int main(){
+    bool nxtlev[SYM_CNT];
+
+    printf("input PL/0 file: ");
+    scanf("%s", fname);
+
+    if (!(fin = fopen(fname, "r"))) {
+        printf("cannot open the input file\n");
+        exit(1);
+    }
+
+    ch = fgetc(fin);
+    if (ch == EOF) {
+        printf("The input file is empty\n");
+        fclose(fin);
+        exit(1);
+    }
+    rewind(fin);
+
+    if (!(fout = fopen("fout.txt", "w"))) {
+        printf("cannot open the output file\n");
+        exit(1);
+    }
+
+    if (!(ftable = fopen("ftable.txt", "w"))) {
+        printf("cannot open ftable.txt file\n");
+        exit(1);
+    }
+
+    printf("list object code?(y/n)");
+    scanf("%s", fname);
+    list_switch = (fname[0] == 'y' || fname[0] == 'Y');
+
+    printf("list symbol table?(y/n)");
+    scanf("%s", fname);
+    table_switch = (fname[0] == 'y' || fname[0] == 'Y');
+
+    init();
+    cc = ll = cx = 0;
+    ch = ' ';
+    err = 0;
+
+    getsym();
+    addset(nxtlev, declbegsys, statbegsys, SYM_CNT);
+    nxtlev[period] = true;
+
+    block(0, 0, nxtlev);
+
+    if (sym != period) error(9);
+    if (err == 0) {
+        printf("\n===Parsing success!===\n");
+        fprintf(fout, "\n===Parsing success!===\n");
+
+        if (!(fcode = fopen("fcode.txt", "w"))) {
+            printf("cannot open fcode.txt\n");
+            exit(1);
+        }
+        if (!(fresult = fopen("fresult.txt", "w"))) {
+            printf("cannot open fresult.txt\n");
+            exit(1);
+        }
+
+        list_all();
+        fclose(fcode);
+
+        interpret();
+        fclose(fresult);
+    } else {
+        printf("\n===%d errors in PL/0 program!===\n", err);
+        fprintf(fout, "\n===%d errors in PL/0 program!===\n", err);
+    }
+
+    fclose(ftable);
+    fclose(fout);
+    fclose(fin);
+
+    return 0;
+}
+
+
+
+void init(){
+    for (int i = 0; i <= 255; i++){
+        ssym[i] = nul;
+    }
+    ssym['+'] = plus;
+    ssym['-'] = minus;
+    ssym['*'] = times;
+    ssym['/'] = slash;
+    ssym['('] = lparen;
+    ssym[')'] = rparen;
+    ssym['='] = eql;
+    ssym[','] = comma;
+    ssym['.'] = period;
+    ssym['#'] = neq;
+    ssym[';'] = semicolon;
+    ssym['{'] = begin_sym;
+    ssym['}'] = end_sym;
+
+    strcpy(&(word[0][0]), "call");
+    strcpy(&(word[1][0]), "const");
+    strcpy(&(word[2][0]), "do");
+    strcpy(&(word[3][0]), "if");
+    strcpy(&(word[4][0]), "main");
+    strcpy(&(word[5][0]), "odd");
+    strcpy(&(word[6][0]), "procedure");
+    strcpy(&(word[7][0]), "read");
+    strcpy(&(word[8][0]), "then");
+    strcpy(&(word[9][0]), "var");
+    strcpy(&(word[10][0]), "while");
+    strcpy(&(word[11][0]), "write");
+
+    wsym[0] = call_sym;
+    wsym[1] = const_sym;
+    wsym[2] = do_sym;
+    wsym[3] = if_sym;
+    wsym[4] = main_sym;
+    wsym[5] = odd_sym;
+    wsym[6] = proc_sym;
+    wsym[7] = read_sym;
+    wsym[8] = then_sym;
+    wsym[9] = var_sym;
+    wsym[10] = while_sym;
+    wsym[11] = write_sym;
+
+    strcpy(&(mnemonic[lit][0]), "lit");
+    strcpy(&(mnemonic[opr][0]), "opr");
+    strcpy(&(mnemonic[lod][0]), "lod");
+    strcpy(&(mnemonic[sto][0]), "sto");
+    strcpy(&(mnemonic[cal][0]), "cal");
+    strcpy(&(mnemonic[ini][0]), "ini");
+    strcpy(&(mnemonic[jmp][0]), "jmp");
+    strcpy(&(mnemonic[jpc][0]), "jpc");
+
+    for (int i = 0; i < SYM_CNT; i++){
+        declbegsys[i] = false;
+        statbegsys[i] = false;
+        factbegsys[i] = false;
+    }
+
+    declbegsys[const_sym] = true;
+    declbegsys[var_sym]   = true;
+    declbegsys[proc_sym]  = true;
+
+    statbegsys[begin_sym] = true;
+    statbegsys[call_sym]  = true;
+    statbegsys[if_sym]    = true;
+    statbegsys[while_sym] = true;
+
+    factbegsys[ident]  = true;
+    factbegsys[number] = true;
+    factbegsys[lparen] = true;
+}
+
+int inset(int e, const bool *s){
+    return s[e];
+}
+
+int addset(bool *sr, const bool *s1, const bool *s2, int n){
+    for (int i = 0; i < n; i++) sr[i] = s1[i] | s2[i];
+    return 0;
+}
+
+int subset(bool *sr, const bool *s1, const bool *s2, int n){
+    for (int i = 0; i < n; i++) sr[i] = s1[i] && (!s2[i]);
+    return 0;
+}
+
+int mulset(bool *sr, const bool *s1, const bool *s2, int n){
+    for (int i = 0; i < n; i++) sr[i] = s1[i] && s2[i];
+    return 0;
+}
+
+
+void error(int n){
+    char space[81];
+    memset(space, 32, 81);
+    space[cc - 1] = 0;
+    printf("%s ^ %d\n", space, n);
+    fprintf(fout, "%s ^ %d\n", space, n);
+
+    err = err + 1;
+    if (err > MAXERR) exit(1);
+}
+
+
+void getch() {
+    if (cc == ll) {
+        if (feof(fin)) {
+            printf("Program incomplete!\n");
+            exit(1);
+        }
+        ll = 0;
+        cc = 0;
+        printf("%d ", cx);
+        fprintf(fout, "%d ", cx);
+
+        ch = ' ';
+        while (ch != '\n') {
+            if (fscanf(fin, "%c", &ch) == EOF) {
+                line[ll] = 0;
+                break;
+            }
+
+            printf("%c", ch);
+            fprintf(fout, "%c", ch);
+            line[ll] = ch;
+            ll++;
+        }
+    }
+
+    ch = line[cc];
+    cc++;
+}
+
+
+void getsym(){
+    int i, j, k;
+
+    while (ch == ' ' || ch == '\n' || ch == '\r' ||ch == '\t') getch();
+    if (('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z')) {
+        k = 0;
+        do {
+            if (k < AL) {
+                A[k] = ch;
+                k++;
+            }
+            getch();
+        } while (('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ('0' <= ch && ch <= '9'));
+        A[k] = 0;
+        strcpy(id, A);
+        i = 0;
+        j = NROW - 1;
+        do {
+            k = (i + j) / 2;
+            if (strcmp(id, word[k]) <= 0) j = k - 1;
+            if (strcmp(id, word[k]) >= 0) i = k + 1;
+        } while (i <= j);
+
+        // printf("i: %d, j: %d, k: %d ", i, j, k);
+        // if (i - 1 > j) printf("wsym[%d] = %d\n\n", k, wsym[k]);
+        // else printf("\n\n");
+        if (i - 1 > j) sym = wsym[k];
+        else sym = ident;
+    } else if (ch >= '0' && ch <= '9') {
+        k = 0;
+        num = 0;
+        sym = number;
+        do {
+            num = 10 * num + ch - '0';
+            k++;
+            getch();
+        } while (ch >= '0' && ch <= '9');
+        k--;
+        if (k > NMAX) error(30);
+    } else if (ch == ':') {
+        getch();
+        if (ch == '=') {
+            sym = becomes;
+            getch();
+        } else sym = nul;
+    } else if (ch == '<') {
+        getch();
+        if (ch == '=') {
+            sym = leq;
+            getch();
+        } else sym = lss;
+    } else if (ch == '>') {
+        getch();
+        if (ch == '=') {
+            sym = geq;
+            getch();
+        } else sym = gtr;
+    } else {
+        sym = ssym[ch];
+        if (sym != period) getch();
+    }
+}
+
+
+void gen(enum fct f, int l, int a) {
+    if (cx >= MAX_CX) {
+        printf("program too long\n");
+        exit(1);
+    }
+
+    if (a >= MAX_ADDR) {
+        printf("address overflow\n");
+        exit(1);
+    }
+    code[cx].f = f;
+    code[cx].l = l;
+    code[cx].a = a;
+    cx++;
+}
+
+
+void test(bool *s1, bool *s2, int n){
+    if (!inset(sym, s1)) {
+        error(n);
+        while (!inset(sym, s1) && !inset(sym, s2)) getsym();
+    }
+}
+
+void block(int lev, int tx, bool *fsys){
+    int dx = 3;
+    int tx0 = tx;
+    int cx0;
+    bool nxtlev[SYM_CNT];
+
+    table[tx].adr = cx;
+    gen(jmp, 0, 0);
+    if (lev > MAX_LEVEL) error(32);
+
+    do {
+        if (sym == const_sym) {
+            getsym();
+            do {
+                const_decl(&tx, lev, &dx);
+                while (sym == comma) {
+                    getsym();
+                    const_decl(&tx, lev, &dx);
+                }
+                if (sym == semicolon) getsym();
+                else error(5);
+            } while (sym == ident);
+        }
+
+        if (sym == var_sym) {
+            getsym();
+            do {
+                var_decl(&tx, lev, &dx);
+                while (sym == comma) {
+                    getsym();
+                    var_decl(&tx, lev, &dx);
+                }
+                if (sym == semicolon) getsym();
+                else error(5);
+            } while (sym == ident);
+        }
+
+        while (sym == proc_sym) {
+            getsym();
+            if (sym == ident) {
+                enter(procedure, &tx, lev, &dx);
+                getsym();
+            } else error(4);
+
+            if (sym == semicolon) getsym();
+            else error(5);
+
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            nxtlev[semicolon] = true;
+            block(lev + 1, tx, nxtlev);
+
+            if (sym == semicolon) {
+                getsym();
+                memcpy(nxtlev, statbegsys, sizeof(bool[SYM_CNT]));
+                nxtlev[ident] = true;
+                nxtlev[proc_sym] = true;
+                test(nxtlev, fsys, 6);
+            } else error(5);
+        }
+
+        memcpy(nxtlev, statbegsys, sizeof(bool[SYM_CNT]));
+        nxtlev[ident] = true;
+        test(nxtlev, declbegsys, 7);
+    } while (inset(sym, declbegsys));
+
+    code[table[tx0].adr].a = cx;
+    table[tx0].adr = cx;
+    table[tx0].size = dx;
+    cx0 = cx;
+    gen(ini, 0, dx);
+
+    if (table_switch) {
+        for (int i = 1; i <= tx; i++) {
+            switch (table[i].kind) {
+                case constant:
+                    printf("    %d const %s ", i, table[i].name);
+                    printf("val = %d\n", table[i].val);
+                    fprintf(ftable, "    %d const %s ", i, table[i].name);
+                    fprintf(ftable, "val = %d\n", table[i].val);
+                    fflush(NULL);
+                    break;
+                case variable:
+                    printf("    %d var %s ", i, table[i].name);
+                    printf("lev = %d addr = %d\n", table[i].level, table[i].adr);
+                    fprintf(ftable, "    %d var %s ", i, table[i].name);
+                    fprintf(ftable, "lev = %d addr = %d\n", table[i].level, table[i].adr);
+                    break;
+                case procedure:
+                    printf("    %d proc %s ", i, table[i].name);
+                    printf("lev = %d addr = %d, size = %d\n", table[i].level, table[i].adr, table[i].size);
+                    fprintf(ftable, "    %d proc %s ", i, table[i].name);
+                    fprintf(ftable, "lev = %d addr = %d, size = %d\n", table[i].level, table[i].adr, table[i].size);
+                    break;
+            }
+            printf("\n");
+            fprintf(ftable, "\n");
+        }
+    }
+
+    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+    nxtlev[semicolon] = true;
+    nxtlev[end_sym]   = true;
+    statement(nxtlev, &tx, lev);
+    gen(opr, 0, 0);
+    memset(nxtlev, 0, sizeof(bool[SYM_CNT]));
+    test(fsys, nxtlev, 8);
+    list_code(cx0);
+}
+
+
+void enter(enum object k, int *ptx, int lev, int *pdx) {
+    (*ptx)++;
+    strcpy(table[*ptx].name, id);
+    table[*ptx].kind = k;
+    switch (k) {
+        case constant:
+            if (num > MAX_ADDR) {
+                error(31);
+                num = 0;
+            }
+            table[(*ptx)].val = num;
+            break;
+        case variable:
+            table[*ptx].level = lev;
+            table[*ptx].adr = *pdx;
+            (*pdx)++;
+            break;
+        case procedure:
+            table[*ptx].level = lev;
+            break;
+    }
+}
+
+int position(char *id, int tx) {
+    int i;
+    strcpy(table[0].name, id);
+    i = tx;
+    while (strcmp(table[i].name, id) != 0) i--;
+    return i;
+}
+
+void const_decl(int *ptx, int lev, int *pdx) {
+    if (sym == ident) {
+        getsym();
+        if (sym == eql || sym == becomes) {
+            if (sym == becomes) error(1);
+            getsym();
+            if (sym == number) {
+                enter(constant, ptx, lev, pdx);
+                getsym();
+            } else {
+                error(2);
+            }
+        } else {
+            error(3);
+        }
+    } else {
+        error(4);
+    }
+}
+
+void var_decl(int *ptx, int lev, int *pdx) {
+    if (sym == ident) {
+        enter(variable, ptx, lev, pdx);
+        getsym();
+    } else {
+        error(4);
+    }
+}
+
+void list_code(int cx0) {
+    if (list_switch) {
+        printf("\n");
+        for (int i = cx0; i < cx; i++) {
+            printf("%d %s %d %d\n", i, mnemonic[code[i].f], code[i].l, code[i].a);
+        }
+    }
+}
+
+void list_all() {
+    if (list_switch) {
+        for (int i = 0; i < cx; i++) {
+            printf("%d %s %d %d\n", i, mnemonic[code[i].f], code[i].l, code[i].a);
+            fprintf(fcode, "%d %s %d %d\n", i, mnemonic[code[i].f], code[i].l, code[i].a);
+        }
+    }
+}
+
+void statement(bool *fsys, int *ptx, int lev) {
+    int i, cx1, cx2;
+    bool nxtlev[SYM_CNT];
+
+    switch(sym) {
+        case ident:
+            i = position(id, *ptx);
+
+            if (i == 0) error(11);
+            else {
+                if (table[i].kind != variable) {
+                    error(12);
+                    i = 0;
+                } else {
+                    getsym();
+                    if (sym == becomes) getsym();
+                    else error(13);
+                    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+                    expression(nxtlev, ptx, lev);
+                    if (i != 0) gen(sto, lev - table[i].level, table[i].adr);
+                }
+            }
+            break;
+        case read_sym:
+            getsym();
+            if (sym == ident) i = position(id, *ptx);
+            else i = 0;
+            if (i == 0) error(35);
+            else {
+                gen(opr, 0, 16);
+                gen(sto, lev - table[i].level, table[i].adr);
+            }
+            getsym();
+            break;
+        case write_sym:
+            getsym();
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            expression(nxtlev, ptx, lev);
+            gen(opr, 0, 14);
+            gen(opr, 0, 15);
+            break;
+        case call_sym:
+            getsym();
+            if (sym != ident) error(14);
+            else {
+                i = position(id, *ptx);
+
+                if (i == 0) error(11);
+                else {
+                    if (table[i].kind == procedure) gen(cal, lev - table[i].level, table[i].adr);
+                    else error(15);
+                }
+                getsym();
+            }
+            break;
+        case if_sym:
+            getsym();
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            nxtlev[then_sym] = true;
+            nxtlev[do_sym] = true;
+            condition(nxtlev, ptx, lev);
+            if (sym == then_sym) getsym();
+            else error(16);
+            cx1 = cx;
+            gen(jpc, 0, 0);
+            statement(fsys, ptx, lev);
+            code[cx1].a = cx;
+            break;
+        case begin_sym:
+            getsym();
+            memcpy(nxtlev, fsys, sizeof(bool) * SYM_CNT);
+            nxtlev[semicolon] = true;
+            nxtlev[end_sym] = true;
+            statement(nxtlev, ptx, lev);
+
+            while (inset(sym, statbegsys) || sym == semicolon) {
+                if (sym == semicolon) getsym();
+                else error(10);
+                statement(nxtlev, ptx, lev);
+            }
+            if (sym == end_sym) getsym();
+            else error(17);
+            break;
+        case while_sym:
+            cx1 = cx;
+            getsym();
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            nxtlev[do_sym] = true;
+            condition(nxtlev, ptx, lev);
+            cx2 = cx;
+            gen(jpc, 0, 0);
+
+            if (sym == do_sym) getsym();
+            else error(18);
+            statement(fsys, ptx, lev);
+            gen(jmp, 0, cx1);
+            code[cx2].a = cx;
+            break;
+        default:
+            break;
+    }
+
+    memset(nxtlev, 0, sizeof(bool[SYM_CNT]));
+    test(fsys, nxtlev, 19);
+}
+
+
+void expression(bool *fsys, int *ptx, int lev) {
+    enum symbol addop;
+    bool nxtlev[SYM_CNT];
+
+    if (sym == plus || sym == minus) {
+        addop = sym;
+        getsym();
+        memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+        nxtlev[plus] = true;
+        nxtlev[minus] = true;
+        term(nxtlev, ptx, lev);
+        if (addop == minus) gen(opr, 0, 1);
+    } else {
+        memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+        nxtlev[plus] = true;
+        nxtlev[minus] = true;
+        term(nxtlev, ptx, lev);
+    }
+    while (sym == plus || sym == minus) {
+        addop = sym;
+        getsym();
+        memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+        nxtlev[plus] = true;
+        nxtlev[minus] = true;
+        term(nxtlev, ptx, lev);
+        gen(opr, 0, 2 + (addop == minus));
+    }
+}
+
+void term(bool *fsys, int *ptx, int lev) {
+    enum symbol mulop;
+    bool nxtlev[SYM_CNT];
+
+    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+    nxtlev[times] = true;
+    nxtlev[slash] = true;
+    factor(nxtlev, ptx, lev);
+
+    while (sym == times || sym == slash) {
+        mulop = sym;
+        getsym();
+        factor(nxtlev, ptx, lev);
+        gen(opr, 0, 4 + (mulop == slash));
+    }
+}
+
+void factor(bool *fsys, int *ptx, int lev) {
+    int i;
+    bool nxtlev[SYM_CNT];
+    test(factbegsys, fsys, 24);
+
+    while(inset(sym, factbegsys)){
+        switch (sym) {
+            case ident:
+                i = position(id, *ptx);
+                if (i == 0) error(11);
+                else {
+                    switch (table[i].kind) {
+                        case constant:
+                            gen(lit, 0, table[i].val);
+                            break;
+                        case variable:
+                            printf("lod %d %d\n", lev - table[i].level, table[i].adr);
+                            gen(lod, lev - table[i].level, table[i].adr);
+                            break;
+                        case procedure:
+                            error(21);
+                            break;
+                    }
+                }
+                getsym();
+                break;
+            case number:
+                if (num > MAX_ADDR) {
+                   error(31);
+                   num = 0;
+                }
+                gen(lit, 0, num);
+                getsym();
+                break;
+            case lparen:
+                getsym();
+                memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+                nxtlev[rparen] = true;
+                expression(nxtlev, ptx, lev);
+                if (sym == rparen) getsym();
+                else error(22);
+                break;
+            default:
+                break;
+        }
+
+        memset(nxtlev, 0, sizeof(bool[SYM_CNT]));
+        nxtlev[lparen] = true;
+        test(fsys, nxtlev, 23);
+    }
+}
+
+
+void condition(bool *fsys, int *ptx, int lev){
+    enum symbol relop;
+    bool nxtlev[SYM_CNT];
+    if (sym == odd_sym) {
+        getsym();
+        expression(fsys, ptx, lev);
+        gen(opr, 0, 6);
+    } else {
+        memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+        nxtlev[eql] = true;
+        nxtlev[neq] = true;
+        nxtlev[lss] = true;
+        nxtlev[leq] = true;
+        nxtlev[gtr] = true;
+        nxtlev[geq] = true;
+        expression(nxtlev, ptx, lev);
+        if (sym != eql && sym != neq && sym != lss && sym != leq && sym != gtr && sym != geq) error(20);
+        else {
+            relop = sym;
+            getsym();
+            expression(fsys, ptx, lev);
+            gen(opr, 0, relop);
+        }
+    }
+}
+
+enum opcode {
+    op_ret, op_rev, op_add, op_sub,  op_mul,
+    op_div, op_odd,         op_eq=8, op_neq,
+    op_lt,  op_gte, op_gt,  op_lte,  op_write,
+    op_lf,  op_read
+};
+
+void interpret() {
+    int p = 0;
+    int b = 1;
+    int t = 0;
+    struct instruction i;
+    int s[STACK_SIZE];
+    printf("start pl0\n");
+    fprintf(fresult, "start pl0\n");
+    s[0] = 0;
+    s[1] = 0;
+    s[2] = 0;
+    s[3] = 0;
+    do {
+        // printf("p = %d\n", p);
+        // fflush(NULL);
+        i = code[p];
+        p++;
+        switch (i.f) {
+            case lit:
+                t++;
+                s[t] = i.a;
+                break;
+            case opr:
+                switch (i.a) {
+                    case op_ret:
+                        t = b - 1;
+                        p = s[t + 3];
+                        b = s[t + 2];
+                        break;
+                    case op_rev:
+                        s[t] = -s[t];
+                        break;
+                    case op_add:
+                        t--;
+                        s[t] += s[t + 1];
+                        break;
+                    case op_sub:
+                        t--;
+                        s[t] -= s[t + 1];
+                        break;
+                    case op_mul:
+                        t--;
+                        s[t] *= s[t + 1];
+                        break;
+                    case op_div:
+                        t--;
+                        s[t] /= s[t + 1];
+                        break;
+                    case op_odd:
+                        s[t] %= 2;
+                        break;
+                    case op_eq:
+                        t--;
+                        s[t] = s[t] == s[t + 1];
+                        break;
+                    case op_neq:
+                        t--;
+                        s[t] = s[t] != s[t + 1];
+                        break;
+                    case op_lt:
+                        t--;
+                        s[t] = s[t] < s[t + 1];
+                        break;
+                    case op_gte:
+                        t--;
+                        s[t] = s[t] >= s[t + 1];
+                        break;
+                    case op_gt:
+                        t--;
+                        s[t] = s[t] > s[t + 1];
+                        break;
+                    case op_lte:
+                        t--;
+                        s[t] = s[t] <= s[t + 1];
+                        break;
+                    case op_write:
+                        printf("%d", s[t]);
+                        fprintf(fresult, "%d", s[t]);
+                        t--;
+                        break;
+                    case op_lf:
+                        printf("\n");
+                        fprintf(fresult, "\n");
+                        break;
+                    case op_read:
+                        t++;
+                        printf("?");
+                        fprintf(fresult, "?");
+                        scanf("%d", &(s[t]));
+                        fprintf(fresult, "%d\n", s[t]);
+                        break;
+                }
+                break;
+            case lod:
+                t += 1;
+                s[t] = s[base(i.l, s, b) + i.a];
+                break;
+            case sto:
+                s[base(i.l, s, b) + i.a] = s[t];
+                t -= 1;
+                break;
+            case cal:
+                s[t + 1] = base(i.l, s, b);
+                s[t + 2] = b;
+                s[t + 3] = p;
+                b = t + 1;
+                p = i.a;
+                break;
+            case ini:
+                t += i.a;
+                break;
+            case jmp:
+                p = i.a;
+                break;
+            case jpc:
+                if (s[t] == 0) p = i.a;
+                t -= 1;
+                break;
+        }
+    } while (p != 0);
+    printf("end pl0\n");
+    fprintf(fresult, "end pl0\n");
+}
+
+int base(int l, int *s, int b) {
+    int b1;
+    b1 = b;
+    while (l > 0) {
+        b1 = s[b1];
+        l--;
+    }
+    return b1;
+}
