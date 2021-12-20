@@ -151,11 +151,11 @@ int main(){
 
     getsym();
     addset(nxtlev, declbegsys, statbegsys, SYM_CNT);
-    nxtlev[period] = true;
+    nxtlev[end_sym] = true;
 
     block(0, 0, nxtlev);
 
-    if (sym != period) error(9);
+    if (sym != end_sym) error(9);
     if (err == 0) {
         printf("\n===Parsing success!===\n");
         fprintf(fout, "\n===Parsing success!===\n");
@@ -255,6 +255,8 @@ void init(){
     statbegsys[call_sym]  = true;
     statbegsys[if_sym]    = true;
     statbegsys[while_sym] = true;
+    statbegsys[read_sym]  = true;
+    statbegsys[write_sym] = true;
 
     factbegsys[ident]  = true;
     factbegsys[number] = true;
@@ -421,31 +423,21 @@ void block(int lev, int tx, bool *fsys){
     gen(jmp, 0, 0);
     if (lev > MAX_LEVEL) error(32);
 
+    if (sym == begin_sym) getsym(); else error(100);
+
     do {
-        if (sym == const_sym) {
+        while (sym == const_sym) {
             getsym();
-            do {
-                const_decl(&tx, lev, &dx);
-                while (sym == comma) {
-                    getsym();
-                    const_decl(&tx, lev, &dx);
-                }
-                if (sym == semicolon) getsym();
-                else error(5);
-            } while (sym == ident);
+            const_decl(&tx, lev, &dx);
+            if (sym == semicolon) getsym();
+            else error(5);
         }
 
-        if (sym == var_sym) {
+        while (sym == var_sym) {
             getsym();
-            do {
-                var_decl(&tx, lev, &dx);
-                while (sym == comma) {
-                    getsym();
-                    var_decl(&tx, lev, &dx);
-                }
-                if (sym == semicolon) getsym();
-                else error(5);
-            } while (sym == ident);
+            var_decl(&tx, lev, &dx);
+            if (sym == semicolon) getsym();
+            else error(5);
         }
 
         while (sym == proc_sym) {
@@ -455,14 +447,10 @@ void block(int lev, int tx, bool *fsys){
                 getsym();
             } else error(4);
 
-            if (sym == semicolon) getsym();
-            else error(5);
-
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-            nxtlev[semicolon] = true;
             block(lev + 1, tx, nxtlev);
 
-            if (sym == semicolon) {
+            if (sym == end_sym) {
                 getsym();
                 memcpy(nxtlev, statbegsys, sizeof(bool[SYM_CNT]));
                 nxtlev[ident] = true;
@@ -514,6 +502,12 @@ void block(int lev, int tx, bool *fsys){
     nxtlev[semicolon] = true;
     nxtlev[end_sym]   = true;
     statement(nxtlev, &tx, lev);
+
+    while (inset(sym, statbegsys) || sym == semicolon) {
+        if (sym == semicolon) getsym();
+        else error(10);
+        statement(nxtlev, &tx, lev);
+    }
     gen(opr, 0, 0);
     memset(nxtlev, 0, sizeof(bool[SYM_CNT]));
     test(fsys, nxtlev, 8);
