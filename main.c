@@ -41,11 +41,11 @@ enum object {
 };
 
 enum type {
-    bool_, char_, double_, int_
+    bool_, char_, float_, int_
 };
 
 char type_word[4][10] = {
-        "bool", "char", "double", "int"
+        "bool", "char", "float", "int"
 };
 
 enum fct {
@@ -57,6 +57,16 @@ struct instruction {
     enum fct f;
     int l;
     int a;
+};
+
+enum opcode {
+    op_ret, op_rev, op_add, op_sub,  op_mul,
+    op_div, op_odd,         op_eq=8, op_neq,
+    op_lt,  op_gte, op_gt,  op_lte,  op_write,
+    op_lf,  op_read
+};
+enum io {
+    io_bool, io_char, io_float, io_int
 };
 
 bool list_switch;
@@ -120,10 +130,10 @@ int base(int l, int *s, int b);
 
 void block(int lev, int tx, bool *fsys);
 void statement(bool *fsys, int *ptx, int lev);
-void expression(bool *fsys, int *ptx, int lev);
+enum type expression(bool *fsys, int *ptx, int lev);
 void condition(bool *fsys, int *ptx, int lev);
-void term(bool *fsys, int *ptx, int lev);
-void factor(bool *fsys, int *ptx, int lev);
+enum type term(bool *fsys, int *ptx, int lev);
+enum type factor(bool *fsys, int *ptx, int lev);
 void var_decl(int *ptx, int lev, int *pdx);
 void const_decl(int *ptx, int lev, int *pdx);
 
@@ -664,6 +674,7 @@ void statement(bool *fsys, int *ptx, int lev) {
     int i, cx1, cx2;
     bool is_array;
     bool nxtlev[SYM_CNT];
+    enum type t;
 
     switch(sym) {
         case ident:
@@ -708,7 +719,7 @@ void statement(bool *fsys, int *ptx, int lev) {
             else i = 0;
             if (i == 0) error(35);
             else {
-                gen(opr, 0, 16);
+                gen(opr, table[i].type, op_read);
                 gen(sto, lev - table[i].level, table[i].adr);
             }
             getsym();
@@ -716,9 +727,9 @@ void statement(bool *fsys, int *ptx, int lev) {
         case write_sym:
             getsym();
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-            expression(nxtlev, ptx, lev);
-            gen(opr, 0, 14);
-            gen(opr, 0, 15);
+            t = expression(nxtlev, ptx, lev);
+            gen(opr, t, op_write);
+            gen(opr, 0, op_lf);
             break;
         case call_sym:
             getsym();
@@ -786,7 +797,8 @@ void statement(bool *fsys, int *ptx, int lev) {
 }
 
 
-void expression(bool *fsys, int *ptx, int lev) {
+enum type expression(bool *fsys, int *ptx, int lev) {
+    enum type this_type;
     enum symbol addop;
     bool nxtlev[SYM_CNT];
 
@@ -796,13 +808,13 @@ void expression(bool *fsys, int *ptx, int lev) {
         memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
         nxtlev[plus] = true;
         nxtlev[minus] = true;
-        term(nxtlev, ptx, lev);
+        this_type = term(nxtlev, ptx, lev);
         if (addop == minus) gen(opr, 0, 1);
     } else {
         memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
         nxtlev[plus] = true;
         nxtlev[minus] = true;
-        term(nxtlev, ptx, lev);
+        this_type = term(nxtlev, ptx, lev);
     }
     while (sym == plus || sym == minus) {
         addop = sym;
@@ -810,29 +822,37 @@ void expression(bool *fsys, int *ptx, int lev) {
         memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
         nxtlev[plus] = true;
         nxtlev[minus] = true;
-        term(nxtlev, ptx, lev);
+        enum type t = term(nxtlev, ptx, lev);
+        if (t == float_ || this_type == float_) this_type = float_;
+        else if (t == int_ || this_type == int_) this_type = int_;
         gen(opr, 0, 2 + (addop == minus));
     }
+    return this_type;
 }
 
-void term(bool *fsys, int *ptx, int lev) {
+enum type term(bool *fsys, int *ptx, int lev) {
+    enum type this_type;
     enum symbol mulop;
     bool nxtlev[SYM_CNT];
 
     memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
     nxtlev[times] = true;
     nxtlev[slash] = true;
-    factor(nxtlev, ptx, lev);
+    this_type = factor(nxtlev, ptx, lev);
 
     while (sym == times || sym == slash) {
         mulop = sym;
         getsym();
-        factor(nxtlev, ptx, lev);
+        enum type t = factor(nxtlev, ptx, lev);
+        if (t == float_ || this_type == float_) this_type = float_;
+        else if (t == int_ || this_type == int_) this_type = int_;
         gen(opr, 0, 4 + (mulop == slash));
     }
+    return this_type;
 }
 
-void factor(bool *fsys, int *ptx, int lev) {
+enum type factor(bool *fsys, int *ptx, int lev) {
+    enum type this_type;
     int i;
     bool nxtlev[SYM_CNT];
     test(factbegsys, fsys, 24);
@@ -846,6 +866,7 @@ void factor(bool *fsys, int *ptx, int lev) {
                     switch (table[i].kind) {
                         case constant:
                             gen(lit, 0, table[i].val);
+                            this_type = table[i].type;
                             break;
                         case variable:
                             if (table[i].size) {
@@ -863,6 +884,7 @@ void factor(bool *fsys, int *ptx, int lev) {
                                 printf("lod %d %d\n", lev - table[i].level, table[i].adr);
                                 gen(lod, lev - table[i].level, table[i].adr);
                             }
+                            this_type = table[i].type;
                             break;
                         case procedure:
                             error(21);
@@ -877,13 +899,14 @@ void factor(bool *fsys, int *ptx, int lev) {
                    num = 0;
                 }
                 gen(lit, 0, num);
+                this_type = int_;
                 getsym();
                 break;
             case lparen:
                 getsym();
                 memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
                 nxtlev[rparen] = true;
-                expression(nxtlev, ptx, lev);
+                this_type = expression(nxtlev, ptx, lev);
                 if (sym == rparen) getsym();
                 else error(22);
                 break;
@@ -897,6 +920,7 @@ void factor(bool *fsys, int *ptx, int lev) {
         // dump_set(fsys);
         test(fsys, nxtlev, 23);
     }
+    return this_type;
 }
 
 
@@ -926,13 +950,6 @@ void condition(bool *fsys, int *ptx, int lev){
     }
 }
 
-enum opcode {
-    op_ret, op_rev, op_add, op_sub,  op_mul,
-    op_div, op_odd,         op_eq=8, op_neq,
-    op_lt,  op_gte, op_gt,  op_lte,  op_write,
-    op_lf,  op_read
-};
-
 void dump_stack(int *s, int t) {
     printf("t = %d\n", t);
     fflush(NULL);
@@ -940,10 +957,16 @@ void dump_stack(int *s, int t) {
     printf("\n");
 }
 
+void runtime_error(int error_code) {
+    printf("runtime error: %d\n", error_code);
+    exit(1);
+}
+
 void interpret() {
     int p = 0;
     int b = 1;
     int t = 0;
+    char buffer[6];
     struct instruction i;
     int s[STACK_SIZE];
     printf("start pl0\n");
@@ -1017,8 +1040,20 @@ void interpret() {
                         s[t] = s[t] <= s[t + 1];
                         break;
                     case op_write:
-                        printf("%d", s[t]);
-                        fprintf(fresult, "%d", s[t]);
+                        switch(i.l) {
+                            case io_int:
+                                printf("%d", s[t]);
+                                fprintf(fresult, "%d", s[t]);
+                                break;
+                            case io_char:
+                                printf("%c", s[t]);
+                                fprintf(fresult, "%c", s[t]);
+                                break;
+                            case io_bool:
+                                printf(s[t] ? "true": "false");
+                                fprintf(fresult, s[t] ? "true": "false");
+                                break;
+                        }
                         t--;
                         break;
                     case op_lf:
@@ -1029,7 +1064,21 @@ void interpret() {
                         t++;
                         printf("?");
                         fprintf(fresult, "?");
-                        scanf("%d", &(s[t]));
+                        switch(i.l) {
+                            case io_int:
+                                scanf("%d", &s[t]);
+                                break;
+                            case io_char:
+                                scanf(" %c", &buffer[0]);
+                                s[t] = (int)buffer[0];
+                                break;
+                            case io_bool:
+                                scanf("%s", buffer);
+                                if (strcmp(buffer, "true") == 0)  s[t] = 1;
+                                else if (strcmp(buffer, "false") == 0) s[t] = 0;
+                                else runtime_error(1);
+                                break;
+                        }
                         fprintf(fresult, "%d\n", s[t]);
                         break;
                 }
