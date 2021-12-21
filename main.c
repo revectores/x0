@@ -802,14 +802,16 @@ void statement(bool *fsys, int *ptx, int lev) {
         case while_sym:
             cx1 = cx;
             getsym();
+            if (sym == lparen) getsym();
+            else error(50);
+
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-            nxtlev[do_sym] = true;
+            nxtlev[rparen] = true;
             condition(nxtlev, ptx, lev);
+            if (sym == rparen) getsym(); else error(51);
             cx2 = cx;
             gen(jpc, 0, 0);
 
-            if (sym == do_sym) getsym();
-            else error(18);
             statement(fsys, ptx, lev);
             gen(jmp, 0, cx1);
             code[cx2].a = cx;
