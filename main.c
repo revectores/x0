@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define NROW 12
+#define NROW 13
 #define TXMAX 100
 #define NMAX 14
 #define AL 10
@@ -22,9 +22,9 @@ enum symbol {
     begin_sym, end_sym,  if_sym,    then_sym, while_sym,
     write_sym, read_sym, do_sym,    call_sym, const_sym,
     var_sym,   proc_sym, main_sym,  type_sym, lbracket,
-    rbracket,
+    rbracket,  else_sym,
 };
-#define SYM_CNT 36
+#define SYM_CNT 37
 char symbol_words[SYM_CNT][10] = {
     "nul",       "ident",    "number",    "plus",     "minus",
     "times",     "slash",    "odd_sym",   "eql",      "neq",
@@ -33,7 +33,7 @@ char symbol_words[SYM_CNT][10] = {
     "begin_sym", "end_sym",  "if_sym",    "then_sym", "while_sym",
     "write_sym", "read_sym", "do_sym",    "call_sym", "const_sym",
     "var_sym",   "proc_sym", "main_sym",  "type_sym", "lbracket",
-    "rbracket",
+    "rbracket",  "else_sym"
 };
 
 enum object {
@@ -140,6 +140,10 @@ void const_decl(int *ptx, int lev, int *pdx);
 void dump_set(bool *s) {
     for (int i = 0; i < SYM_CNT; i++) if (s[i]) printf("%s ", symbol_words[i]);
     printf("\n");
+}
+
+void dump_sym() {
+    printf("current sym: %s\n", symbol_words[sym]);
 }
 
 
@@ -251,28 +255,30 @@ void init(){
     strcpy(&(word[0][0]), "call");
     strcpy(&(word[1][0]), "const");
     strcpy(&(word[2][0]), "do");
-    strcpy(&(word[3][0]), "if");
-    strcpy(&(word[4][0]), "main");
-    strcpy(&(word[5][0]), "odd");
-    strcpy(&(word[6][0]), "procedure");
-    strcpy(&(word[7][0]), "read");
-    strcpy(&(word[8][0]), "then");
-    strcpy(&(word[9][0]), "var");
-    strcpy(&(word[10][0]), "while");
-    strcpy(&(word[11][0]), "write");
+    strcpy(&(word[3][0]), "else");
+    strcpy(&(word[4][0]), "if");
+    strcpy(&(word[5][0]), "main");
+    strcpy(&(word[6][0]), "odd");
+    strcpy(&(word[7][0]), "procedure");
+    strcpy(&(word[8][0]), "read");
+    strcpy(&(word[9][0]), "then");
+    strcpy(&(word[10][0]), "var");
+    strcpy(&(word[11][0]), "while");
+    strcpy(&(word[12][0]), "write");
 
     wsym[0] = call_sym;
     wsym[1] = const_sym;
     wsym[2] = do_sym;
-    wsym[3] = if_sym;
-    wsym[4] = main_sym;
-    wsym[5] = odd_sym;
-    wsym[6] = proc_sym;
-    wsym[7] = read_sym;
-    wsym[8] = then_sym;
-    wsym[9] = var_sym;
-    wsym[10] = while_sym;
-    wsym[11] = write_sym;
+    wsym[4] = if_sym;
+    wsym[3] = else_sym;
+    wsym[5] = main_sym;
+    wsym[6] = odd_sym;
+    wsym[7] = proc_sym;
+    wsym[8] = read_sym;
+    wsym[9] = then_sym;
+    wsym[10] = var_sym;
+    wsym[11] = while_sym;
+    wsym[12] = write_sym;
 
     strcpy(&(mnemonic[lit][0]), "lit");
     strcpy(&(mnemonic[opr][0]), "opr");
@@ -301,6 +307,7 @@ void init(){
     statbegsys[while_sym] = true;
     statbegsys[read_sym]  = true;
     statbegsys[write_sym] = true;
+    statbegsys[ident]     = true;
 
     factbegsys[ident]  = true;
     factbegsys[number] = true;
@@ -562,9 +569,7 @@ void block(int lev, int tx, bool *fsys){
     nxtlev[end_sym]   = true;
     statement(nxtlev, &tx, lev);
 
-    while (inset(sym, statbegsys) || sym == semicolon) {
-        if (sym == semicolon) getsym();
-        else error(10);
+    while (inset(sym, statbegsys)) {
         statement(nxtlev, &tx, lev);
     }
     gen(opr, 0, 0);
@@ -712,6 +717,8 @@ void statement(bool *fsys, int *ptx, int lev) {
                     }
                 }
             }
+            if (sym == semicolon) getsym();
+            else error(5);
             break;
         case read_sym:
             getsym();
@@ -723,6 +730,8 @@ void statement(bool *fsys, int *ptx, int lev) {
                 gen(sto, lev - table[i].level, table[i].adr);
             }
             getsym();
+            if (sym == semicolon) getsym();
+            else error(5);
             break;
         case write_sym:
             getsym();
@@ -730,6 +739,8 @@ void statement(bool *fsys, int *ptx, int lev) {
             t = expression(nxtlev, ptx, lev);
             gen(opr, t, op_write);
             gen(opr, 0, op_lf);
+            if (sym == semicolon) getsym();
+            else error(5);
             break;
         case call_sym:
             getsym();
@@ -743,20 +754,37 @@ void statement(bool *fsys, int *ptx, int lev) {
                     else error(15);
                 }
                 getsym();
+                if (sym == semicolon) getsym();
+                else error(5);
             }
             break;
         case if_sym:
             getsym();
+            if (sym == lparen) getsym();
+            else error(50);
+
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-            nxtlev[then_sym] = true;
-            nxtlev[do_sym] = true;
+            nxtlev[rparen] = true;
             condition(nxtlev, ptx, lev);
-            if (sym == then_sym) getsym();
-            else error(16);
+
+            if (sym == rparen) getsym(); else error(51);
             cx1 = cx;
             gen(jpc, 0, 0);
-            statement(fsys, ptx, lev);
-            code[cx1].a = cx;
+
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            nxtlev[else_sym] = true;
+            statement(nxtlev, ptx, lev);
+
+            if (sym == else_sym) {
+                cx2 = cx;
+                gen(jmp, 0, 0);
+                getsym();
+                code[cx1].a = cx;
+                statement(fsys, ptx, lev);
+                code[cx2].a = cx;
+            } else {
+                code[cx1].a = cx;
+            }
             break;
         case begin_sym:
             getsym();
@@ -765,9 +793,7 @@ void statement(bool *fsys, int *ptx, int lev) {
             nxtlev[end_sym] = true;
             statement(nxtlev, ptx, lev);
 
-            while (inset(sym, statbegsys) || sym == semicolon) {
-                if (sym == semicolon) getsym();
-                else error(10);
+            while (inset(sym, statbegsys)) {
                 statement(nxtlev, ptx, lev);
             }
             if (sym == end_sym) getsym();
