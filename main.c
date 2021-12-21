@@ -242,10 +242,9 @@ void init(){
     ssym['/'] = slash;
     ssym['('] = lparen;
     ssym[')'] = rparen;
-    ssym['='] = eql;
+    ssym['='] = becomes;
     ssym[','] = comma;
     ssym['.'] = period;
-    ssym['#'] = neq;
     ssym[';'] = semicolon;
     ssym['{'] = begin_sym;
     ssym['}'] = end_sym;
@@ -429,10 +428,18 @@ void getsym(){
         } while (ch >= '0' && ch <= '9');
         k--;
         if (k > NMAX) error(30);
-    } else if (ch == ':') {
+    } else if (ch == '=') {
         getch();
         if (ch == '=') {
+            sym = eql;
+            getch();
+        } else {
             sym = becomes;
+        }
+    } else if (ch == '!') {
+        getch();
+        if (ch == '=') {
+            sym = neq;
             getch();
         } else sym = nul;
     } else if (ch == '<') {
@@ -617,8 +624,7 @@ int position(char *id, int tx) {
 void const_decl(int *ptx, int lev, int *pdx) {
     if (sym == ident) {
         getsym();
-        if (sym == eql || sym == becomes) {
-            if (sym == becomes) error(1);
+        if (sym == becomes) {
             getsym();
             if (sym == number) {
                 enter(constant, ptx, lev, pdx);
