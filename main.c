@@ -21,9 +21,20 @@ enum symbol {
     rparen,    comma,    semicolon, period,   becomes,
     begin_sym, end_sym,  if_sym,    then_sym, while_sym,
     write_sym, read_sym, do_sym,    call_sym, const_sym,
-    var_sym,   proc_sym, main_sym,  type_sym,
+    var_sym,   proc_sym, main_sym,  type_sym, lbracket,
+    rbracket,
 };
-#define SYM_CNT 32
+#define SYM_CNT 36
+char symbol_words[SYM_CNT][10] = {
+    "nul",       "ident",    "number",    "plus",     "minus",
+    "times",     "slash",    "odd_sym",   "eql",      "neq",
+    "lss",       "geq",      "gtr",       "leq",      "lparen",
+    "rparen",    "comma",    "semicolon", "period",   "becomes",
+    "begin_sym", "end_sym",  "if_sym",    "then_sym", "while_sym",
+    "write_sym", "read_sym", "do_sym",    "call_sym", "const_sym",
+    "var_sym",   "proc_sym", "main_sym",  "type_sym", "lbracket",
+    "rbracket",
+};
 
 enum object {
     constant, variable, procedure
@@ -38,9 +49,9 @@ char type_word[4][10] = {
 };
 
 enum fct {
-    lit, opr, lod, sto, cal, ini, jmp, jpc
+    lit, opr, lod, sto, cal, ini, jmp, jpc, ldx, stx,
 };
-#define FCT_CNT 8
+#define FCT_CNT 10
 
 struct instruction {
     enum fct f;
@@ -54,6 +65,7 @@ char ch;
 enum symbol sym;
 char id[AL + 1];
 int num;
+int size;
 enum type type;
 int cc, ll;
 int cx;
@@ -115,6 +127,10 @@ void factor(bool *fsys, int *ptx, int lev);
 void var_decl(int *ptx, int lev, int *pdx);
 void const_decl(int *ptx, int lev, int *pdx);
 
+void dump_set(bool *s) {
+    for (int i = 0; i < SYM_CNT; i++) if (s[i]) printf("%s ", symbol_words[i]);
+    printf("\n");
+}
 
 
 
@@ -219,6 +235,8 @@ void init(){
     ssym[';'] = semicolon;
     ssym['{'] = begin_sym;
     ssym['}'] = end_sym;
+    ssym['['] = lbracket;
+    ssym[']'] = rbracket;
 
     strcpy(&(word[0][0]), "call");
     strcpy(&(word[1][0]), "const");
@@ -254,6 +272,8 @@ void init(){
     strcpy(&(mnemonic[ini][0]), "ini");
     strcpy(&(mnemonic[jmp][0]), "jmp");
     strcpy(&(mnemonic[jpc][0]), "jpc");
+    strcpy(&(mnemonic[ldx][0]), "ldx");
+    strcpy(&(mnemonic[stx][0]), "stx");
 
     for (int i = 0; i < SYM_CNT; i++){
         declbegsys[i] = false;
@@ -505,22 +525,21 @@ void block(int lev, int tx, bool *fsys){
             switch (table[i].kind) {
                 case constant:
                     printf("    %d const %s ", i, table[i].name);
-                    printf("val = %d type = %s\n", table[i].val, type_word[table[i].type]);
+                    printf("val = %d, type = %s, size = %d\n", table[i].val, type_word[table[i].type], table[i].size);
                     fprintf(ftable, "    %d const %s ", i, table[i].name);
-                    fprintf(ftable, "val = %d type = %s\n", table[i].val, type_word[table[i].type]);
-                    fflush(NULL);
+                    fprintf(ftable, "val = %d, type = %s, size = %d\n", table[i].val, type_word[table[i].type], table[i].size);
                     break;
                 case variable:
                     printf("    %d var %s ", i, table[i].name);
-                    printf("lev = %d addr = %d type = %s\n", table[i].level, table[i].adr, type_word[table[i].type]);
+                    printf("lev = %d, addr = %d, type = %s, size = %d\n", table[i].level, table[i].adr, type_word[table[i].type], table[i].size);
                     fprintf(ftable, "    %d var %s ", i, table[i].name);
-                    fprintf(ftable, "lev = %d addr = %d type = %s\n", table[i].level, table[i].adr, type_word[table[i].type]);
+                    fprintf(ftable, "lev = %d, addr = %d, type = %s, size = %d\n", table[i].level, table[i].adr, type_word[table[i].type], table[i].size);
                     break;
                 case procedure:
                     printf("    %d proc %s ", i, table[i].name);
-                    printf("lev = %d addr = %d, size = %d\n", table[i].level, table[i].adr, table[i].size);
+                    printf("lev = %d, addr = %d, size = %d\n", table[i].level, table[i].adr, table[i].size);
                     fprintf(ftable, "    %d proc %s ", i, table[i].name);
-                    fprintf(ftable, "lev = %d addr = %d, size = %d\n", table[i].level, table[i].adr, table[i].size);
+                    fprintf(ftable, "lev = %d, addr = %d, size = %d\n", table[i].level, table[i].adr, table[i].size);
                     break;
             }
             printf("\n");
@@ -557,12 +576,14 @@ void enter(enum object k, int *ptx, int lev, int *pdx) {
             }
             table[*ptx].val = num;
             table[*ptx].type = type;
+            table[*ptx].size = 0;
             break;
         case variable:
             table[*ptx].level = lev;
             table[*ptx].adr = *pdx;
             table[*ptx].type = type;
-            (*pdx)++;
+            table[*ptx].size = size;
+            *pdx += size ? size : 1;
             break;
         case procedure:
             table[*ptx].level = lev;
@@ -600,8 +621,22 @@ void const_decl(int *ptx, int lev, int *pdx) {
 
 void var_decl(int *ptx, int lev, int *pdx) {
     if (sym == ident) {
-        enter(variable, ptx, lev, pdx);
         getsym();
+        if (sym == lbracket) {
+            getsym();
+            if (sym == number) {
+                size = num;
+                getsym();
+                if (sym == rbracket) {
+                    getsym();
+                }
+                else error(303);
+            } else error(2);
+        } else {
+            size = 0;
+        }
+        enter(variable, ptx, lev, pdx);
+
     } else {
         error(4);
     }
@@ -627,6 +662,7 @@ void list_all() {
 
 void statement(bool *fsys, int *ptx, int lev) {
     int i, cx1, cx2;
+    bool is_array;
     bool nxtlev[SYM_CNT];
 
     switch(sym) {
@@ -640,11 +676,29 @@ void statement(bool *fsys, int *ptx, int lev) {
                     i = 0;
                 } else {
                     getsym();
+                    is_array = false;
+                    if (sym == lbracket) {
+                        is_array = true;
+                        if (table[i].size) {
+                            getsym();
+                            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+                            nxtlev[rparen] = true;
+                            nxtlev[rbracket] = true;
+                            expression(nxtlev, ptx, lev);
+                            if (sym == rbracket) getsym();
+                            else error(303);
+                        } else error(500);
+                    }
+
                     if (sym == becomes) getsym();
                     else error(13);
                     memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
                     expression(nxtlev, ptx, lev);
-                    if (i != 0) gen(sto, lev - table[i].level, table[i].adr);
+                    if (is_array) {
+                        gen(stx, lev - table[i].level, table[i].adr);
+                    } else {
+                        gen(sto, lev - table[i].level, table[i].adr);
+                    }
                 }
             }
             break;
@@ -794,8 +848,21 @@ void factor(bool *fsys, int *ptx, int lev) {
                             gen(lit, 0, table[i].val);
                             break;
                         case variable:
-                            printf("lod %d %d\n", lev - table[i].level, table[i].adr);
-                            gen(lod, lev - table[i].level, table[i].adr);
+                            if (table[i].size) {
+                                getsym();
+                                if (sym == lbracket) {
+                                    getsym();
+                                    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+                                    nxtlev[rparen] = true;
+                                    nxtlev[rbracket] = true;
+                                    expression(nxtlev, ptx, lev);
+                                    if (sym != rbracket) error(303);
+                                    gen(ldx, lev - table[i].level, table[i].adr);
+                                } else error(302);
+                            } else {
+                                printf("lod %d %d\n", lev - table[i].level, table[i].adr);
+                                gen(lod, lev - table[i].level, table[i].adr);
+                            }
                             break;
                         case procedure:
                             error(21);
@@ -826,6 +893,8 @@ void factor(bool *fsys, int *ptx, int lev) {
 
         memset(nxtlev, 0, sizeof(bool[SYM_CNT]));
         nxtlev[lparen] = true;
+        // printf("current sym: %d\n", sym);
+        // dump_set(fsys);
         test(fsys, nxtlev, 23);
     }
 }
@@ -864,6 +933,13 @@ enum opcode {
     op_lf,  op_read
 };
 
+void dump_stack(int *s, int t) {
+    printf("t = %d\n", t);
+    fflush(NULL);
+    for (int c = 0; c <= t; c++) printf("%d\n", s[c]);
+    printf("\n");
+}
+
 void interpret() {
     int p = 0;
     int b = 1;
@@ -880,6 +956,7 @@ void interpret() {
         // printf("p = %d\n", p);
         // fflush(NULL);
         i = code[p];
+        // printf("after code %s %d %d\n", mnemonic[code[p].f], code[p].l, code[p].a);
         p++;
         switch (i.f) {
             case lit:
@@ -961,9 +1038,16 @@ void interpret() {
                 t += 1;
                 s[t] = s[base(i.l, s, b) + i.a];
                 break;
+            case ldx:
+                s[t] = s[base(i.l, s, b) + i.a + s[t]];
+                break;
             case sto:
                 s[base(i.l, s, b) + i.a] = s[t];
                 t -= 1;
+                break;
+            case stx:
+                s[base(i.l, s, b) + i.a + s[t - 1]] = s[t];
+                t -= 2;
                 break;
             case cal:
                 s[t + 1] = base(i.l, s, b);
@@ -983,6 +1067,7 @@ void interpret() {
                 t -= 1;
                 break;
         }
+        // dump_stack(s, t);
     } while (p != 0);
     printf("end pl0\n");
     fprintf(fresult, "end pl0\n");
