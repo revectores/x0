@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define NROW 13
+#define NROW 12
 #define TXMAX 100
 #define NMAX 14
 #define AL 10
@@ -12,6 +12,7 @@
 #define MAX_LEVEL 3
 #define MAX_CX 200
 #define STACK_SIZE 500
+#define NTYPE 4
 
 enum symbol {
     nul,       ident,    number,    plus,     minus,
@@ -20,12 +21,20 @@ enum symbol {
     rparen,    comma,    semicolon, period,   becomes,
     begin_sym, end_sym,  if_sym,    then_sym, while_sym,
     write_sym, read_sym, do_sym,    call_sym, const_sym,
-    var_sym,   proc_sym, main_sym,  void_sym,
+    var_sym,   proc_sym, main_sym,  type_sym,
 };
 #define SYM_CNT 32
 
 enum object {
     constant, variable, procedure
+};
+
+enum type {
+    bool_, char_, double_, int_
+};
+
+char type_word[4][10] = {
+        "bool", "char", "double", "int"
 };
 
 enum fct {
@@ -45,6 +54,7 @@ char ch;
 enum symbol sym;
 char id[AL + 1];
 int num;
+enum type type;
 int cc, ll;
 int cx;
 char line[81];
@@ -61,6 +71,7 @@ bool factbegsys[SYM_CNT];
 struct table_struct {
     char name[AL];
     enum object kind;
+    enum type type;
     int val;
     int level;
     int adr;
@@ -355,7 +366,21 @@ void getsym(){
         // if (i - 1 > j) printf("wsym[%d] = %d\n\n", k, wsym[k]);
         // else printf("\n\n");
         if (i - 1 > j) sym = wsym[k];
-        else sym = ident;
+        else {
+            i = 0;
+            j = NTYPE - 1;
+            do {
+                k = (i + j) / 2;
+                if (strcmp(id, type_word[k]) <= 0) j = k - 1;
+                if (strcmp(id, type_word[k]) >= 0) i = k + 1;
+            } while (i <= j);
+
+            if (i - 1 > j) {
+                sym = type_sym;
+                type = (enum type)k;
+            }
+            else sym = ident;
+        }
     } else if (ch >= '0' && ch <= '9') {
         k = 0;
         num = 0;
@@ -431,12 +456,14 @@ void block(int lev, int tx, bool *fsys){
     do {
         while (sym == const_sym) {
             getsym();
+            if (sym == type_sym) getsym();
+            else error(301);
             const_decl(&tx, lev, &dx);
             if (sym == semicolon) getsym();
             else error(5);
         }
 
-        while (sym == var_sym) {
+        while (sym == type_sym) {
             getsym();
             var_decl(&tx, lev, &dx);
             if (sym == semicolon) getsym();
@@ -478,16 +505,16 @@ void block(int lev, int tx, bool *fsys){
             switch (table[i].kind) {
                 case constant:
                     printf("    %d const %s ", i, table[i].name);
-                    printf("val = %d\n", table[i].val);
+                    printf("val = %d type = %s\n", table[i].val, type_word[table[i].type]);
                     fprintf(ftable, "    %d const %s ", i, table[i].name);
-                    fprintf(ftable, "val = %d\n", table[i].val);
+                    fprintf(ftable, "val = %d type = %s\n", table[i].val, type_word[table[i].type]);
                     fflush(NULL);
                     break;
                 case variable:
                     printf("    %d var %s ", i, table[i].name);
-                    printf("lev = %d addr = %d\n", table[i].level, table[i].adr);
+                    printf("lev = %d addr = %d type = %s\n", table[i].level, table[i].adr, type_word[table[i].type]);
                     fprintf(ftable, "    %d var %s ", i, table[i].name);
-                    fprintf(ftable, "lev = %d addr = %d\n", table[i].level, table[i].adr);
+                    fprintf(ftable, "lev = %d addr = %d type = %s\n", table[i].level, table[i].adr, type_word[table[i].type]);
                     break;
                 case procedure:
                     printf("    %d proc %s ", i, table[i].name);
@@ -528,11 +555,13 @@ void enter(enum object k, int *ptx, int lev, int *pdx) {
                 error(31);
                 num = 0;
             }
-            table[(*ptx)].val = num;
+            table[*ptx].val = num;
+            table[*ptx].type = type;
             break;
         case variable:
             table[*ptx].level = lev;
             table[*ptx].adr = *pdx;
+            table[*ptx].type = type;
             (*pdx)++;
             break;
         case procedure:
