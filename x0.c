@@ -915,13 +915,14 @@ void interpret() {
     int t = 0;
     char buffer[6];
     struct instruction i;
-    int s[STACK_SIZE];
+    void *s   = malloc(STACK_SIZE);
+    int *si   = (int*)s;
+    float *sf = (float*)s;
+
     printf("start pl0\n");
     fprintf(fresult, "start pl0\n");
-    s[0] = 0;
-    s[1] = 0;
-    s[2] = 0;
-    s[3] = 0;
+    for (int c = 0; c < 4; c++) si[c] = 0;
+
     do {
         // printf("p = %d\n", p);
         // fflush(NULL);
@@ -931,78 +932,82 @@ void interpret() {
         switch (i.f) {
             case lit:
                 t++;
-                s[t] = i.a;
+                si[t] = i.a;
                 break;
             case opr:
                 switch (i.a) {
                     case op_ret:
                         t = b - 1;
-                        p = s[t + 3];
-                        b = s[t + 2];
+                        p = si[t + 3];
+                        b = si[t + 2];
                         break;
                     case op_rev:
-                        s[t] = -s[t];
+                        si[t] = -si[t];
                         break;
                     case op_add:
                         t--;
-                        s[t] += s[t + 1];
+                        si[t] += si[t + 1];
                         break;
                     case op_sub:
                         t--;
-                        s[t] -= s[t + 1];
+                        si[t] -= si[t + 1];
                         break;
                     case op_mul:
                         t--;
-                        s[t] *= s[t + 1];
+                        si[t] *= si[t + 1];
                         break;
                     case op_div:
                         t--;
-                        s[t] /= s[t + 1];
+                        si[t] /= si[t + 1];
                         break;
                     case op_mod:
                         t--;
-                        s[t] %= s[t + 1];
+                        si[t] %= si[t + 1];
                         break;
                     case op_odd:
-                        s[t] %= 2;
+                        si[t] %= 2;
                         break;
                     case op_eq:
                         t--;
-                        s[t] = s[t] == s[t + 1];
+                        si[t] = si[t] == si[t + 1];
                         break;
                     case op_neq:
                         t--;
-                        s[t] = s[t] != s[t + 1];
+                        si[t] = si[t] != si[t + 1];
                         break;
                     case op_lt:
                         t--;
-                        s[t] = s[t] < s[t + 1];
+                        si[t] = si[t] < si[t + 1];
                         break;
                     case op_gte:
                         t--;
-                        s[t] = s[t] >= s[t + 1];
+                        si[t] = si[t] >= si[t + 1];
                         break;
                     case op_gt:
                         t--;
-                        s[t] = s[t] > s[t + 1];
+                        si[t] = si[t] > si[t + 1];
                         break;
                     case op_lte:
                         t--;
-                        s[t] = s[t] <= s[t + 1];
+                        si[t] = si[t] <= si[t + 1];
                         break;
                     case op_write:
                         switch(i.l) {
                             case io_int:
-                                printf("%d", s[t]);
-                                fprintf(fresult, "%d", s[t]);
+                                printf("%d", si[t]);
+                                fprintf(fresult, "%d", si[t]);
                                 break;
                             case io_char:
-                                printf("%c", s[t]);
-                                fprintf(fresult, "%c", s[t]);
+                                printf("%c", si[t]);
+                                fprintf(fresult, "%c", si[t]);
                                 break;
                             case io_bool:
-                                printf(s[t] ? "true": "false");
-                                fprintf(fresult, s[t] ? "true": "false");
+                                printf(si[t] ? "true" : "false");
+                                fprintf(fresult, si[t] ? "true" : "false");
+                                break;
+                            case io_float:
+                                printf("%f", sf[t]);
+                                fprintf(fresult, "%f", sf[t]);
                                 break;
                         }
                         t--;
@@ -1017,42 +1022,48 @@ void interpret() {
                         fprintf(fresult, "?");
                         switch(i.l) {
                             case io_int:
-                                scanf("%d", &s[t]);
+                                scanf("%d", &si[t]);
+                                fprintf(fresult, "%d\n", si[t]);
                                 break;
                             case io_char:
                                 scanf(" %c", &buffer[0]);
-                                s[t] = (int)buffer[0];
+                                si[t] = (int)buffer[0];
+                                fprintf(fresult, "%c\n", si[t]);
                                 break;
                             case io_bool:
-                                scanf("%s", buffer);
-                                if (strcmp(buffer, "true") == 0)  s[t] = 1;
-                                else if (strcmp(buffer, "false") == 0) s[t] = 0;
+                                scanf("%si", buffer);
+                                if (strcmp(buffer, "true") == 0) si[t] = 1;
+                                else if (strcmp(buffer, "false") == 0) si[t] = 0;
                                 else runtime_error(1);
+                                fprintf(fresult, "%s\n", si[t] ? "true" : "false");
+                                break;
+                            case io_float:
+                                scanf("%f", &sf[t]);
+                                fprintf(fresult, "%f\n", sf[t]);
                                 break;
                         }
-                        fprintf(fresult, "%d\n", s[t]);
                         break;
                 }
                 break;
             case lod:
                 t += 1;
-                s[t] = s[base(i.l, s, b) + i.a];
+                si[t] = si[base(i.l, si, b) + i.a];
                 break;
             case ldx:
-                s[t] = s[base(i.l, s, b) + i.a + s[t]];
+                si[t] = si[base(i.l, si, b) + i.a + si[t]];
                 break;
             case sto:
-                s[base(i.l, s, b) + i.a] = s[t];
+                si[base(i.l, si, b) + i.a] = si[t];
                 t -= 1;
                 break;
             case stx:
-                s[base(i.l, s, b) + i.a + s[t - 1]] = s[t];
+                si[base(i.l, si, b) + i.a + si[t - 1]] = si[t];
                 t -= 2;
                 break;
             case cal:
-                s[t + 1] = base(i.l, s, b);
-                s[t + 2] = b;
-                s[t + 3] = p;
+                si[t + 1] = base(i.l, si, b);
+                si[t + 2] = b;
+                si[t + 3] = p;
                 b = t + 1;
                 p = i.a;
                 break;
@@ -1063,11 +1074,11 @@ void interpret() {
                 p = i.a;
                 break;
             case jpc:
-                if (s[t] == 0) p = i.a;
+                if (si[t] == 0) p = i.a;
                 t -= 1;
                 break;
         }
-        // dump_stack(s, t);
+        // dump_stack(si, t);
     } while (p != 0);
     printf("end pl0\n");
     fprintf(fresult, "end pl0\n");

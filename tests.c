@@ -36,18 +36,23 @@ void run_test(char *name) {
     char fname[80];
     sprintf(fname, "../output/test_%s_output.txt", name);
     freopen(fname, "w", stdout);
-    sprintf(fname, "../tests/test_%s.pl0", name);
+    sprintf(fname, "../tests/test_%s/test_%s_input.txt", name, name);
+    freopen(fname, "r", stdin);
+    sprintf(fname, "../tests/test_%s/test_%s.pl0", name, name);
     compile_and_run(fname);
     assert(err == 0);
-    sprintf(fname, "../tests/test_%s_fresult.txt", name);
+    sprintf(fname, "../tests/test_%s/test_%s_fresult.txt", name, name);
     assert(is_identical(fname, "fresult.txt"));
 }
-
 
 int main() {
     run_test("empty");
     run_test("expression");
     run_test("comment");
     run_test("mod");
+    run_test("int_io");
+    run_test("bool_io");
+    run_test("char_io");
+    run_test("float_io");
     return 0;
 }
