@@ -15,6 +15,7 @@
 #define MAX_LEVEL 3
 #define MAX_CX 200
 #define STACK_SIZE 500
+#define LINE_WIDTH 200
 
 enum symbol {
     nul,       ident,    number,    plus,     minus,
@@ -69,7 +70,8 @@ enum type type;
 int cc, ll;
 int cx;
 int unpaired_begin_cnt;
-char line[81];
+bool comment;
+char line[LINE_WIDTH + 1];
 char A[AL + 1];
 struct instruction code[MAX_CX];
 char word[NROW][AL];

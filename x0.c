@@ -29,7 +29,6 @@ void dump_sym() {
 }
 
 void compile_and_run(char *fname) {
-    unpaired_begin_cnt = 0;
     bool nxtlev[SYM_CNT];
 
     if (!(fin = fopen(fname, "r"))) {
@@ -68,6 +67,7 @@ void compile_and_run(char *fname) {
     init();
     cc = ll = cx = 0;
     ch = ' ';
+    unpaired_begin_cnt = 0;
     err = 0;
 
     getsym();
@@ -212,8 +212,8 @@ int mulset(bool *sr, const bool *s1, const bool *s2, int n){
 
 
 void error(int n){
-    char space[81];
-    memset(space, 32, 81);
+    char space[LINE_WIDTH + 1];
+    memset(space, 32, LINE_WIDTH + 1);
     space[cc - 1] = 0;
     printf("%s ^ %d\n", space, n);
     fprintf(fout, "%s ^ %d\n", space, n);
@@ -256,7 +256,7 @@ void getch() {
 void getsym(){
     int i, j, k;
 
-    while (ch == ' ' || ch == '\n' || ch == '\r' ||ch == '\t') getch();
+    while (ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t') getch();
     if (('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z')) {
         k = 0;
         do {
@@ -332,6 +332,20 @@ void getsym(){
             sym = geq;
             getch();
         } else sym = gtr;
+    } else if (ch == '/') {
+        getch();
+        if (ch == '*') {
+            getch();
+            while (1) {
+                while (ch != '*') getch();
+                getch();
+                if (ch == '/') break;
+            }
+            getch();
+            getsym();
+        } else {
+            sym = slash;
+        }
     } else {
         sym = ssym[ch];
         if (sym == begin_sym) unpaired_begin_cnt++;

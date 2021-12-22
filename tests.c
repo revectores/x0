@@ -47,5 +47,6 @@ void run_test(char *name) {
 int main() {
     run_test("empty");
     run_test("expression");
+    run_test("comment");
     return 0;
 }
