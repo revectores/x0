@@ -12,7 +12,7 @@ char symbol_words[SYM_CNT][10] = {
         "begin_sym", "end_sym",  "if_sym",    "then_sym", "while_sym",
         "write_sym", "read_sym", "do_sym",    "call_sym", "const_sym",
         "var_sym",   "proc_sym", "main_sym",  "type_sym", "lbracket",
-        "rbracket",  "else_sym"
+        "rbracket",  "else_sym",  "mod"
 };
 
 char type_word[NTYPE][10] = {
@@ -118,6 +118,7 @@ void init(){
     ssym['-'] = minus;
     ssym['*'] = times;
     ssym['/'] = slash;
+    ssym['%'] = mod;
     ssym['('] = lparen;
     ssym[')'] = rparen;
     ssym['='] = becomes;
@@ -798,15 +799,29 @@ enum type term(bool *fsys, int *ptx, int lev) {
     memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
     nxtlev[times] = true;
     nxtlev[slash] = true;
+    nxtlev[mod]   = true;
     this_type = factor(nxtlev, ptx, lev);
 
-    while (sym == times || sym == slash) {
+    while (sym == times || sym == slash || sym == mod) {
         mulop = sym;
         getsym();
         enum type t = factor(nxtlev, ptx, lev);
         if (t == float_ || this_type == float_) this_type = float_;
         else if (t == int_ || this_type == int_) this_type = int_;
-        gen(opr, 0, 4 + (mulop == slash));
+        switch (mulop) {
+            case times:
+                gen(opr, 0, op_mul);
+                break;
+            case slash:
+                gen(opr, 0, op_div);
+                break;
+            case mod:
+                gen(opr, 0, op_mod);
+                break;
+            default:
+                error(404);
+                break;
+        }
     }
     return this_type;
 }
@@ -943,6 +958,10 @@ void interpret() {
                     case op_div:
                         t--;
                         s[t] /= s[t + 1];
+                        break;
+                    case op_mod:
+                        t--;
+                        s[t] %= s[t + 1];
                         break;
                     case op_odd:
                         s[t] %= 2;

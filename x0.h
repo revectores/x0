@@ -25,9 +25,9 @@ enum symbol {
     begin_sym, end_sym,  if_sym,    then_sym, while_sym,
     write_sym, read_sym, do_sym,    call_sym, const_sym,
     var_sym,   proc_sym, main_sym,  type_sym, lbracket,
-    rbracket,  else_sym,
+    rbracket,  else_sym, mod
 };
-#define SYM_CNT 37
+#define SYM_CNT 38
 
 enum object {
     constant, variable, procedure
@@ -50,10 +50,10 @@ struct instruction {
 };
 
 enum opcode {
-    op_ret, op_rev, op_add, op_sub,  op_mul,
-    op_div, op_odd,         op_eq=8, op_neq,
-    op_lt,  op_gte, op_gt,  op_lte,  op_write,
-    op_lf,  op_read
+    op_ret, op_rev,  op_add, op_sub,  op_mul,
+    op_div, op_odd,          op_eq=8, op_neq,
+    op_lt,  op_gte,  op_gt,  op_lte,  op_write,
+    op_lf,  op_read, op_mod
 };
 enum io {
     io_bool, io_char, io_float, io_int

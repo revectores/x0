@@ -48,5 +48,6 @@ int main() {
     run_test("empty");
     run_test("expression");
     run_test("comment");
+    run_test("mod");
     return 0;
 }
