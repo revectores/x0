@@ -734,8 +734,7 @@ enum type simple_expr(bool *fsys, int *ptx, int lev){
     nxtlev[gtr] = true;
     nxtlev[geq] = true;
     this_type = additive_expr(nxtlev, ptx, lev);
-    dump_sym();
-    if (sym == semicolon) return this_type;
+    if (sym == semicolon || sym == rparen) return this_type;
     if (sym != eql && sym != neq && sym != lss && sym != leq && sym != gtr && sym != geq) error(20);
     relop = sym;
     getsym();
