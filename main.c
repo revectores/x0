@@ -79,6 +79,7 @@ int size;
 enum type type;
 int cc, ll;
 int cx;
+int unpaired_begin_cnt;
 char line[81];
 char A[AL + 1];
 struct instruction code[MAX_CX];
@@ -107,7 +108,7 @@ FILE* ftable;
 FILE* fcode;
 FILE* fout;
 FILE* fresult;
-char fname[AL];
+char fname[80];
 int err;
 
 
@@ -131,7 +132,8 @@ int base(int l, int *s, int b);
 void block(int lev, int tx, bool *fsys);
 void statement(bool *fsys, int *ptx, int lev);
 enum type expression(bool *fsys, int *ptx, int lev);
-void condition(bool *fsys, int *ptx, int lev);
+enum type additive_expr(bool *fsys, int *ptx, int lev);
+enum type simple_expr(bool *fsys, int *ptx, int lev);
 enum type term(bool *fsys, int *ptx, int lev);
 enum type factor(bool *fsys, int *ptx, int lev);
 void var_decl(int *ptx, int lev, int *pdx);
@@ -149,6 +151,7 @@ void dump_sym() {
 
 
 int main(){
+    unpaired_begin_cnt = 0;
     bool nxtlev[SYM_CNT];
 
     printf("input PL/0 file: ");
@@ -456,7 +459,9 @@ void getsym(){
         } else sym = gtr;
     } else {
         sym = ssym[ch];
-        if (sym != period) getch();
+        if (sym == begin_sym) unpaired_begin_cnt++;
+        if (sym == end_sym) unpaired_begin_cnt--;
+        if (unpaired_begin_cnt > 0) getch();
     }
 }
 
@@ -535,6 +540,7 @@ void block(int lev, int tx, bool *fsys){
 
         memcpy(nxtlev, statbegsys, sizeof(bool[SYM_CNT]));
         nxtlev[ident] = true;
+        nxtlev[end_sym] = true;
         test(nxtlev, declbegsys, 7);
     } while (inset(sym, declbegsys));
 
@@ -683,46 +689,13 @@ void list_all() {
 
 void statement(bool *fsys, int *ptx, int lev) {
     int i, cx1, cx2;
-    bool is_array;
     bool nxtlev[SYM_CNT];
     enum type t;
 
     switch(sym) {
         case ident:
-            i = position(id, *ptx);
-
-            if (i == 0) error(11);
-            else {
-                if (table[i].kind != variable) {
-                    error(12);
-                    i = 0;
-                } else {
-                    getsym();
-                    is_array = false;
-                    if (sym == lbracket) {
-                        is_array = true;
-                        if (table[i].size) {
-                            getsym();
-                            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-                            nxtlev[rparen] = true;
-                            nxtlev[rbracket] = true;
-                            expression(nxtlev, ptx, lev);
-                            if (sym == rbracket) getsym();
-                            else error(303);
-                        } else error(500);
-                    }
-
-                    if (sym == becomes) getsym();
-                    else error(13);
-                    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-                    expression(nxtlev, ptx, lev);
-                    if (is_array) {
-                        gen(stx, lev - table[i].level, table[i].adr);
-                    } else {
-                        gen(sto, lev - table[i].level, table[i].adr);
-                    }
-                }
-            }
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            expression(nxtlev, ptx, lev);
             if (sym == semicolon) getsym();
             else error(5);
             break;
@@ -742,7 +715,7 @@ void statement(bool *fsys, int *ptx, int lev) {
         case write_sym:
             getsym();
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-            t = expression(nxtlev, ptx, lev);
+            t = simple_expr(nxtlev, ptx, lev);
             gen(opr, t, op_write);
             gen(opr, 0, op_lf);
             if (sym == semicolon) getsym();
@@ -771,7 +744,7 @@ void statement(bool *fsys, int *ptx, int lev) {
 
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             nxtlev[rparen] = true;
-            condition(nxtlev, ptx, lev);
+            simple_expr(nxtlev, ptx, lev);
 
             if (sym == rparen) getsym(); else error(51);
             cx1 = cx;
@@ -813,7 +786,7 @@ void statement(bool *fsys, int *ptx, int lev) {
 
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             nxtlev[rparen] = true;
-            condition(nxtlev, ptx, lev);
+            simple_expr(nxtlev, ptx, lev);
             if (sym == rparen) getsym(); else error(51);
             cx2 = cx;
             gen(jpc, 0, 0);
@@ -830,8 +803,73 @@ void statement(bool *fsys, int *ptx, int lev) {
     test(fsys, nxtlev, 19);
 }
 
+enum type expression(bool* fsys, int *ptx, int lev) {
+    enum type this_type = int_;
+    int i;
+    bool is_array;
+    bool nxtlev[SYM_CNT];
+    i = position(id, *ptx);
 
-enum type expression(bool *fsys, int *ptx, int lev) {
+    if (i == 0) error(11);
+    else {
+        if (table[i].kind != variable) {
+            error(12);
+            i = 0;
+        } else {
+            this_type = table[i].type;
+            getsym();
+            is_array = false;
+            if (sym == lbracket) {
+                is_array = true;
+                if (table[i].size) {
+                    getsym();
+                    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+                    nxtlev[rparen] = true;
+                    nxtlev[rbracket] = true;
+                    expression(nxtlev, ptx, lev);
+                    if (sym == rbracket) getsym();
+                    else error(303);
+                } else error(500);
+            }
+
+            if (sym == becomes) {
+                getsym();
+                memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+                simple_expr(nxtlev, ptx, lev);
+                if (is_array) {
+                    gen(stx, lev - table[i].level, table[i].adr);
+                } else {
+                    gen(sto, lev - table[i].level, table[i].adr);
+                }
+            } else error(17);
+        }
+    }
+    return this_type;
+}
+
+enum type simple_expr(bool *fsys, int *ptx, int lev){
+    enum type this_type;
+    enum symbol relop;
+    bool nxtlev[SYM_CNT];
+    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+    nxtlev[eql] = true;
+    nxtlev[neq] = true;
+    nxtlev[lss] = true;
+    nxtlev[leq] = true;
+    nxtlev[gtr] = true;
+    nxtlev[geq] = true;
+    this_type = additive_expr(nxtlev, ptx, lev);
+    dump_sym();
+    if (sym == semicolon) return this_type;
+    if (sym != eql && sym != neq && sym != lss && sym != leq && sym != gtr && sym != geq) error(20);
+    relop = sym;
+    getsym();
+    additive_expr(fsys, ptx, lev);
+    gen(opr, 0, relop);
+    return bool_;
+}
+
+enum type additive_expr(bool *fsys, int *ptx, int lev) {
     enum type this_type;
     enum symbol addop;
     bool nxtlev[SYM_CNT];
@@ -910,7 +948,7 @@ enum type factor(bool *fsys, int *ptx, int lev) {
                                     memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
                                     nxtlev[rparen] = true;
                                     nxtlev[rbracket] = true;
-                                    expression(nxtlev, ptx, lev);
+                                    simple_expr(nxtlev, ptx, lev);
                                     if (sym != rbracket) error(303);
                                     gen(ldx, lev - table[i].level, table[i].adr);
                                 } else error(302);
@@ -940,7 +978,7 @@ enum type factor(bool *fsys, int *ptx, int lev) {
                 getsym();
                 memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
                 nxtlev[rparen] = true;
-                this_type = expression(nxtlev, ptx, lev);
+                this_type = simple_expr(nxtlev, ptx, lev);
                 if (sym == rparen) getsym();
                 else error(22);
                 break;
@@ -950,39 +988,11 @@ enum type factor(bool *fsys, int *ptx, int lev) {
 
         memset(nxtlev, 0, sizeof(bool[SYM_CNT]));
         nxtlev[lparen] = true;
-        // printf("current sym: %d\n", sym);
-        // dump_set(fsys);
         test(fsys, nxtlev, 23);
     }
     return this_type;
 }
 
-
-void condition(bool *fsys, int *ptx, int lev){
-    enum symbol relop;
-    bool nxtlev[SYM_CNT];
-    if (sym == odd_sym) {
-        getsym();
-        expression(fsys, ptx, lev);
-        gen(opr, 0, 6);
-    } else {
-        memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-        nxtlev[eql] = true;
-        nxtlev[neq] = true;
-        nxtlev[lss] = true;
-        nxtlev[leq] = true;
-        nxtlev[gtr] = true;
-        nxtlev[geq] = true;
-        expression(nxtlev, ptx, lev);
-        if (sym != eql && sym != neq && sym != lss && sym != leq && sym != gtr && sym != geq) error(20);
-        else {
-            relop = sym;
-            getsym();
-            expression(fsys, ptx, lev);
-            gen(opr, 0, relop);
-        }
-    }
-}
 
 void dump_stack(int *s, int t) {
     printf("t = %d\n", t);
