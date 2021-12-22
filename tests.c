@@ -1,0 +1,51 @@
+#include <stdlib.h>
+#include <assert.h>
+#include <stdio.h>
+#include "x0.h"
+
+
+int is_identical(char *fname1, char *fname2) {
+    FILE *fp1, *fp2;
+    int ch1, ch2;
+
+    fp1 = fopen(fname1, "r");
+    fp2 = fopen(fname2, "r");
+
+    if (fp1 == NULL) {
+        printf("Cannot open %s for reading ", fname1);
+        exit(1);
+    } else if (fp2 == NULL) {
+        printf("Cannot open %s for reading ", fname2);
+        exit(1);
+    } else {
+        ch1 = getc(fp1);
+        ch2 = getc(fp2);
+
+        while ((ch1 != EOF) && (ch2 != EOF) && (ch1 == ch2)) {
+            ch1 = getc(fp1);
+            ch2 = getc(fp2);
+        }
+
+        fclose(fp1);
+        fclose(fp2);
+    }
+    return ch1 == ch2;
+}
+
+void run_test(char *name) {
+    char fname[80];
+    sprintf(fname, "../output/test_%s_output.txt", name);
+    freopen(fname, "w", stdout);
+    sprintf(fname, "../tests/test_%s.pl0", name);
+    compile_and_run(fname);
+    assert(err == 0);
+    sprintf(fname, "../tests/test_%s_fresult.txt", name);
+    assert(is_identical(fname, "fresult.txt"));
+}
+
+
+int main() {
+    run_test("empty");
+    run_test("expression");
+    return 0;
+}
