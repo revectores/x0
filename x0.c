@@ -12,7 +12,7 @@ char symbol_words[SYM_CNT][10] = {
         "begin_sym", "end_sym",  "if_sym",    "then_sym", "while_sym",
         "write_sym", "read_sym", "do_sym",    "call_sym", "const_sym",
         "var_sym",   "proc_sym", "main_sym",  "type_sym", "lbracket",
-        "rbracket",  "else_sym",  "mod"
+        "rbracket",  "else_sym", "mod",       "not_sym"
 };
 
 char type_word[NTYPE][10] = {
@@ -147,8 +147,8 @@ void init(){
     wsym[0] = call_sym;
     wsym[1] = const_sym;
     wsym[2] = do_sym;
-    wsym[4] = if_sym;
     wsym[3] = else_sym;
+    wsym[4] = if_sym;
     wsym[5] = main_sym;
     wsym[6] = odd_sym;
     wsym[7] = proc_sym;
@@ -320,7 +320,9 @@ void getsym(){
         if (ch == '=') {
             sym = neq;
             getch();
-        } else sym = nul;
+        } else {
+            sym = not_sym;
+        }
     } else if (ch == '<') {
         getch();
         if (ch == '=') {
@@ -807,13 +809,13 @@ enum type term(bool *fsys, int *ptx, int lev) {
     nxtlev[times] = true;
     nxtlev[slash] = true;
     nxtlev[mod]   = true;
-    this_type = factor(nxtlev, ptx, lev);
+    this_type = unary(nxtlev, ptx, lev);
 
     while (sym == times || sym == slash || sym == mod) {
         type_mask |= (this_type == float_ ? 0x1 : 0x0);
         mulop = sym;
         getsym();
-        enum type t = factor(nxtlev, ptx, lev);
+        enum type t = unary(nxtlev, ptx, lev);
         type_mask |= (t == float_ ? 0x2 : 0x0);
         if (t == float_ || this_type == float_) this_type = float_;
         else if (t == int_ || this_type == int_) this_type = int_;
@@ -832,6 +834,33 @@ enum type term(bool *fsys, int *ptx, int lev) {
                 error(404);
                 break;
         }
+    }
+    return this_type;
+}
+
+enum type unary(bool *fsys, int *ptx, int lev) {
+    enum type this_type;
+    bool nxtlev[SYM_CNT];
+
+    switch (sym) {
+        case ident:
+        case number:
+        case lparen:
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            this_type = factor(nxtlev, ptx, lev);
+            break;
+        case not_sym:
+            getsym();
+            gen(lit, 0, 1);
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            enum type t = factor(nxtlev, ptx, lev);
+            if (t != bool_) error(300);
+            this_type = t;
+            gen(opr, 0, op_sub);
+            break;
+        default:
+            error(301);
+            break;
     }
     return this_type;
 }

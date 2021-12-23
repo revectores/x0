@@ -25,9 +25,9 @@ enum symbol {
     begin_sym, end_sym,  if_sym,    then_sym, while_sym,
     write_sym, read_sym, do_sym,    call_sym, const_sym,
     var_sym,   proc_sym, main_sym,  type_sym, lbracket,
-    rbracket,  else_sym, mod
+    rbracket,  else_sym, mod,       not_sym,
 };
-#define SYM_CNT 38
+#define SYM_CNT 39
 
 enum object {
     constant, variable, procedure
@@ -126,6 +126,7 @@ enum type expression(bool *fsys, int *ptx, int lev);
 enum type additive_expr(bool *fsys, int *ptx, int lev);
 enum type simple_expr(bool *fsys, int *ptx, int lev);
 enum type term(bool *fsys, int *ptx, int lev);
+enum type unary(bool *fsys, int *ptx, int lev);
 enum type factor(bool *fsys, int *ptx, int lev);
 void var_decl(int *ptx, int lev, int *pdx);
 void const_decl(int *ptx, int lev, int *pdx);

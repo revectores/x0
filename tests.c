@@ -55,5 +55,6 @@ int main() {
     run_test("char_io");
     run_test("float_io");
     run_test("float_opr");
+    run_test("bool_opr");
     return 0;
 }
