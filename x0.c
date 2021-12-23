@@ -738,6 +738,7 @@ enum type expression(bool* fsys, int *ptx, int lev) {
 }
 
 enum type simple_expr(bool *fsys, int *ptx, int lev){
+    int type_mask = 0;
     enum type this_type;
     enum symbol relop;
     bool nxtlev[SYM_CNT];
@@ -753,8 +754,10 @@ enum type simple_expr(bool *fsys, int *ptx, int lev){
     if (sym != eql && sym != neq && sym != lss && sym != leq && sym != gtr && sym != geq) error(20);
     relop = sym;
     getsym();
-    additive_expr(fsys, ptx, lev);
-    gen(opr, 0, relop);
+    type_mask |= (this_type == float_ ? 0x1 : 0x0);
+    enum type t = additive_expr(fsys, ptx, lev);
+    type_mask |= (t == float_ ? 0x2 : 0x0);
+    gen(opr, type_mask, relop);
     return bool_;
 }
 
@@ -762,6 +765,7 @@ enum type additive_expr(bool *fsys, int *ptx, int lev) {
     enum type this_type;
     enum symbol addop;
     bool nxtlev[SYM_CNT];
+    int type_mask = 0;
 
     if (sym == plus || sym == minus) {
         addop = sym;
@@ -770,7 +774,7 @@ enum type additive_expr(bool *fsys, int *ptx, int lev) {
         nxtlev[plus] = true;
         nxtlev[minus] = true;
         this_type = term(nxtlev, ptx, lev);
-        if (addop == minus) gen(opr, 0, 1);
+        if (addop == minus) gen(opr, this_type == float_, 1);
     } else {
         memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
         nxtlev[plus] = true;
@@ -778,15 +782,17 @@ enum type additive_expr(bool *fsys, int *ptx, int lev) {
         this_type = term(nxtlev, ptx, lev);
     }
     while (sym == plus || sym == minus) {
+        type_mask |= (this_type == float_ ? 0x1 : 0x0);
         addop = sym;
         getsym();
         memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
         nxtlev[plus] = true;
         nxtlev[minus] = true;
         enum type t = term(nxtlev, ptx, lev);
+        type_mask |= (this_type == float_ ? 0x2 : 0x0);
         if (t == float_ || this_type == float_) this_type = float_;
         else if (t == int_ || this_type == int_) this_type = int_;
-        gen(opr, 0, 2 + (addop == minus));
+        gen(opr, type_mask, 2 + (addop == minus));
     }
     return this_type;
 }
@@ -795,6 +801,7 @@ enum type term(bool *fsys, int *ptx, int lev) {
     enum type this_type;
     enum symbol mulop;
     bool nxtlev[SYM_CNT];
+    int type_mask = 0;
 
     memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
     nxtlev[times] = true;
@@ -803,20 +810,23 @@ enum type term(bool *fsys, int *ptx, int lev) {
     this_type = factor(nxtlev, ptx, lev);
 
     while (sym == times || sym == slash || sym == mod) {
+        type_mask |= (this_type == float_ ? 0x1 : 0x0);
         mulop = sym;
         getsym();
         enum type t = factor(nxtlev, ptx, lev);
+        type_mask |= (t == float_ ? 0x2 : 0x0);
         if (t == float_ || this_type == float_) this_type = float_;
         else if (t == int_ || this_type == int_) this_type = int_;
+        printf("type_mask = %d\n", type_mask);
         switch (mulop) {
             case times:
-                gen(opr, 0, op_mul);
+                gen(opr, type_mask, op_mul);
                 break;
             case slash:
-                gen(opr, 0, op_div);
+                gen(opr, type_mask, op_div);
                 break;
             case mod:
-                gen(opr, 0, op_mod);
+                gen(opr, type_mask, op_mod);
                 break;
             default:
                 error(404);
@@ -915,13 +925,20 @@ void interpret() {
     int t = 0;
     char buffer[6];
     struct instruction i;
-    void *s   = malloc(STACK_SIZE);
-    int *si   = (int*)s;
-    float *sf = (float*)s;
+    union {
+        void*  p;
+        int*   i;
+        float* f;
+    } s;
+    s.p = malloc(sizeof(int[STACK_SIZE]));
+    union {
+        int i;
+        float f;
+    } op1, op2;
 
     printf("start pl0\n");
     fprintf(fresult, "start pl0\n");
-    for (int c = 0; c < 4; c++) si[c] = 0;
+    memset(s.p, 0, sizeof(int[4]));
 
     do {
         // printf("p = %d\n", p);
@@ -932,82 +949,89 @@ void interpret() {
         switch (i.f) {
             case lit:
                 t++;
-                si[t] = i.a;
+                s.i[t] = i.a;
                 break;
             case opr:
+                if (i.l) {
+                    if (i.l & 0x1) op1.f = (i.l & 0x1) ? s.f[t - 1] : (float)s.i[t - 1];
+                    if (i.l & 0x2) op2.f = (i.l & 0x2) ? s.f[t] : (float)s.i[t];
+                } else {
+                    op1.i = s.i[t - 1];
+                    op2.i = s.i[t];
+                }
                 switch (i.a) {
                     case op_ret:
                         t = b - 1;
-                        p = si[t + 3];
-                        b = si[t + 2];
+                        p = s.i[t + 3];
+                        b = s.i[t + 2];
                         break;
                     case op_rev:
-                        si[t] = -si[t];
+                        if (i.l) s.f[t] = -s.f[t]; else s.i[t] = -s.i[t];
+                        break;
+                    case op_odd:
+                        s.i[t] %= 2;
                         break;
                     case op_add:
                         t--;
-                        si[t] += si[t + 1];
+                        if (i.l) s.f[t] = op1.f + op2.f; else s.i[t] = op1.i + op2.i;
                         break;
                     case op_sub:
                         t--;
-                        si[t] -= si[t + 1];
+                        if (i.l) s.f[t] = op1.f - op2.f; else s.i[t] = op1.i - op2.i;
                         break;
                     case op_mul:
                         t--;
-                        si[t] *= si[t + 1];
+                        if (i.l) s.f[t] = op1.f * op2.f; else s.i[t] = op1.i * op2.i;
                         break;
                     case op_div:
                         t--;
-                        si[t] /= si[t + 1];
+                        if (i.l) s.f[t] = op1.f / op2.f; else s.i[t] = op1.i / op2.i;
                         break;
                     case op_mod:
                         t--;
-                        si[t] %= si[t + 1];
-                        break;
-                    case op_odd:
-                        si[t] %= 2;
+                        if (i.l) runtime_error(2); else s.i[t] = op1.i % op2.i;
                         break;
                     case op_eq:
                         t--;
-                        si[t] = si[t] == si[t + 1];
+                        s.i[t] = i.l ? op1.f == op2.f : op1.i == op2.i;
                         break;
                     case op_neq:
                         t--;
-                        si[t] = si[t] != si[t + 1];
+                        s.i[t] = i.l ? op1.f != op2.f : op1.i != op2.i;
                         break;
                     case op_lt:
                         t--;
-                        si[t] = si[t] < si[t + 1];
+                        s.i[t] = i.l ? op1.f < op2.f : op1.i < op2.i;
                         break;
                     case op_gte:
                         t--;
-                        si[t] = si[t] >= si[t + 1];
+                        s.i[t] = i.l ? op1.f >= op2.f : op1.i >= op2.i;
                         break;
                     case op_gt:
                         t--;
-                        si[t] = si[t] > si[t + 1];
+                        s.i[t] = i.l ? op1.f > op2.f : op1.i > op2.i;
                         break;
                     case op_lte:
                         t--;
-                        si[t] = si[t] <= si[t + 1];
+                        s.i[t] = i.l ? op1.f <= op2.f : op1.i <= op2.i;
                         break;
                     case op_write:
                         switch(i.l) {
                             case io_int:
-                                printf("%d", si[t]);
-                                fprintf(fresult, "%d", si[t]);
+                                printf("%d", s.i[t]);
+                                fprintf(fresult, "%d", s.i[t]);
                                 break;
                             case io_char:
-                                printf("%c", si[t]);
-                                fprintf(fresult, "%c", si[t]);
+                                printf("%c", s.i[t]);
+                                fprintf(fresult, "%c", s.i[t]);
                                 break;
                             case io_bool:
-                                printf(si[t] ? "true" : "false");
-                                fprintf(fresult, si[t] ? "true" : "false");
+                                printf(s.i[t] ? "true" : "false");
+                                fprintf(fresult, s.i[t] ? "true" : "false");
                                 break;
                             case io_float:
-                                printf("%f", sf[t]);
-                                fprintf(fresult, "%f", sf[t]);
+                                printf("%f", s.f[t]);
+                                fprintf(fresult, "%f", s.f[t]);
                                 break;
                         }
                         t--;
@@ -1022,24 +1046,24 @@ void interpret() {
                         fprintf(fresult, "?");
                         switch(i.l) {
                             case io_int:
-                                scanf("%d", &si[t]);
-                                fprintf(fresult, "%d\n", si[t]);
+                                scanf("%d", &s.i[t]);
+                                fprintf(fresult, "%d\n", s.i[t]);
                                 break;
                             case io_char:
                                 scanf(" %c", &buffer[0]);
-                                si[t] = (int)buffer[0];
-                                fprintf(fresult, "%c\n", si[t]);
+                                s.i[t] = (int)buffer[0];
+                                fprintf(fresult, "%c\n", s.i[t]);
                                 break;
                             case io_bool:
-                                scanf("%si", buffer);
-                                if (strcmp(buffer, "true") == 0) si[t] = 1;
-                                else if (strcmp(buffer, "false") == 0) si[t] = 0;
+                                scanf("%s.i", buffer);
+                                if (strcmp(buffer, "true") == 0) s.i[t] = 1;
+                                else if (strcmp(buffer, "false") == 0) s.i[t] = 0;
                                 else runtime_error(1);
-                                fprintf(fresult, "%s\n", si[t] ? "true" : "false");
+                                fprintf(fresult, "%s\n", s.i[t] ? "true" : "false");
                                 break;
                             case io_float:
-                                scanf("%f", &sf[t]);
-                                fprintf(fresult, "%f\n", sf[t]);
+                                scanf("%f", &s.f[t]);
+                                fprintf(fresult, "%f\n", s.f[t]);
                                 break;
                         }
                         break;
@@ -1047,23 +1071,23 @@ void interpret() {
                 break;
             case lod:
                 t += 1;
-                si[t] = si[base(i.l, si, b) + i.a];
+                s.i[t] = s.i[base(i.l, s.i, b) + i.a];
                 break;
             case ldx:
-                si[t] = si[base(i.l, si, b) + i.a + si[t]];
+                s.i[t] = s.i[base(i.l, s.i, b) + i.a + s.i[t]];
                 break;
             case sto:
-                si[base(i.l, si, b) + i.a] = si[t];
+                s.i[base(i.l, s.i, b) + i.a] = s.i[t];
                 t -= 1;
                 break;
             case stx:
-                si[base(i.l, si, b) + i.a + si[t - 1]] = si[t];
+                s.i[base(i.l, s.i, b) + i.a + s.i[t - 1]] = s.i[t];
                 t -= 2;
                 break;
             case cal:
-                si[t + 1] = base(i.l, si, b);
-                si[t + 2] = b;
-                si[t + 3] = p;
+                s.i[t + 1] = base(i.l, s.i, b);
+                s.i[t + 2] = b;
+                s.i[t + 3] = p;
                 b = t + 1;
                 p = i.a;
                 break;
@@ -1074,11 +1098,11 @@ void interpret() {
                 p = i.a;
                 break;
             case jpc:
-                if (si[t] == 0) p = i.a;
+                if (s.i[t] == 0) p = i.a;
                 t -= 1;
                 break;
         }
-        // dump_stack(si, t);
+        // dump_stack(s.i, t);
     } while (p != 0);
     printf("end pl0\n");
     fprintf(fresult, "end pl0\n");
