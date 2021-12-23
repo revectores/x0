@@ -25,9 +25,10 @@ enum symbol {
     begin_sym, end_sym,  if_sym,    then_sym, while_sym,
     write_sym, read_sym, do_sym,    call_sym, const_sym,
     var_sym,   proc_sym, main_sym,  type_sym, lbracket,
-    rbracket,  else_sym, mod,       not_sym,
+    rbracket,  else_sym, mod,       not_sym,  lor,
+    land,
 };
-#define SYM_CNT 39
+#define SYM_CNT 41
 
 enum object {
     constant, variable, procedure
@@ -53,7 +54,7 @@ enum opcode {
     op_ret, op_rev,  op_add, op_sub,  op_mul,
     op_div, op_odd,          op_eq=8, op_neq,
     op_lt,  op_gte,  op_gt,  op_lte,  op_write,
-    op_lf,  op_read, op_mod
+    op_lf,  op_read, op_mod, op_lor,  op_land
 };
 enum io {
     io_bool, io_char, io_float, io_int
@@ -123,6 +124,8 @@ void compile_and_run(char *fname);
 void block(int lev, int tx, bool *fsys);
 void statement(bool *fsys, int *ptx, int lev);
 enum type expression(bool *fsys, int *ptx, int lev);
+enum type clause_or(bool *fsys, int *ptx, int lev);
+enum type clause_and(bool *fsys, int *ptx, int lev);
 enum type additive_expr(bool *fsys, int *ptx, int lev);
 enum type simple_expr(bool *fsys, int *ptx, int lev);
 enum type term(bool *fsys, int *ptx, int lev);

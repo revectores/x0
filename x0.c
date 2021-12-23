@@ -12,7 +12,8 @@ char symbol_words[SYM_CNT][10] = {
         "begin_sym", "end_sym",  "if_sym",    "then_sym", "while_sym",
         "write_sym", "read_sym", "do_sym",    "call_sym", "const_sym",
         "var_sym",   "proc_sym", "main_sym",  "type_sym", "lbracket",
-        "rbracket",  "else_sym", "mod",       "not_sym"
+        "rbracket",  "else_sym", "mod",       "not_sym",  "lor",
+        "land",
 };
 
 char type_word[NTYPE][10] = {
@@ -335,6 +336,18 @@ void getsym(){
             sym = geq;
             getch();
         } else sym = gtr;
+    } else if (ch == '|') {
+        getch();
+        if (ch == '|') {
+            sym = lor;
+            getch();
+        } else sym = nul;
+    } else if (ch == '&') {
+        getch();
+        if (ch == '&') {
+            sym = land;
+            getch();
+        } else sym = nul;
     } else if (ch == '/') {
         getch();
         if (ch == '*') {
@@ -607,7 +620,7 @@ void statement(bool *fsys, int *ptx, int lev) {
         case write_sym:
             getsym();
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-            t = simple_expr(nxtlev, ptx, lev);
+            t = clause_or(nxtlev, ptx, lev);
             gen(opr, t, op_write);
             gen(opr, 0, op_lf);
             if (sym == semicolon) getsym();
@@ -636,7 +649,7 @@ void statement(bool *fsys, int *ptx, int lev) {
 
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             nxtlev[rparen] = true;
-            simple_expr(nxtlev, ptx, lev);
+            clause_or(nxtlev, ptx, lev);
 
             if (sym == rparen) getsym(); else error(51);
             cx1 = cx;
@@ -678,7 +691,7 @@ void statement(bool *fsys, int *ptx, int lev) {
 
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             nxtlev[rparen] = true;
-            simple_expr(nxtlev, ptx, lev);
+            clause_or(nxtlev, ptx, lev);
             if (sym == rparen) getsym(); else error(51);
             cx2 = cx;
             gen(jpc, 0, 0);
@@ -718,7 +731,7 @@ enum type expression(bool* fsys, int *ptx, int lev) {
                     memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
                     nxtlev[rparen] = true;
                     nxtlev[rbracket] = true;
-                    expression(nxtlev, ptx, lev);
+                    clause_or(nxtlev, ptx, lev);
                     if (sym == rbracket) getsym();
                     else error(303);
                 } else error(500);
@@ -727,7 +740,7 @@ enum type expression(bool* fsys, int *ptx, int lev) {
             if (sym == becomes) {
                 getsym();
                 memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-                simple_expr(nxtlev, ptx, lev);
+                clause_or(nxtlev, ptx, lev);
                 if (is_array) {
                     gen(stx, lev - table[i].level, table[i].adr);
                 } else {
@@ -735,6 +748,36 @@ enum type expression(bool* fsys, int *ptx, int lev) {
                 }
             } else error(17);
         }
+    }
+    return this_type;
+}
+
+enum type clause_or(bool *fsys, int *ptx, int lev) {
+    enum type this_type;
+    bool nxtlev[SYM_CNT];
+    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+    nxtlev[lor] = true;
+    this_type = clause_and(nxtlev, ptx, lev);
+    while (sym == lor) {
+        this_type = bool_;
+        getsym();
+        clause_and(nxtlev, ptx, lev);
+        gen(opr, 0, op_lor);
+    }
+    return this_type;
+}
+
+enum type clause_and(bool *fsys, int *ptx, int lev) {
+    enum type this_type;
+    bool nxtlev[SYM_CNT];
+    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+    nxtlev[land] = true;
+    this_type = simple_expr(nxtlev, ptx, lev);
+    while (sym == land) {
+        this_type = bool_;
+        getsym();
+        simple_expr(nxtlev, ptx, lev);
+        gen(opr, 0, op_land);
     }
     return this_type;
 }
@@ -752,15 +795,16 @@ enum type simple_expr(bool *fsys, int *ptx, int lev){
     nxtlev[gtr] = true;
     nxtlev[geq] = true;
     this_type = additive_expr(nxtlev, ptx, lev);
-    if (sym == semicolon || sym == rparen) return this_type;
-    if (sym != eql && sym != neq && sym != lss && sym != leq && sym != gtr && sym != geq) error(20);
-    relop = sym;
-    getsym();
-    type_mask |= (this_type == float_ ? 0x1 : 0x0);
-    enum type t = additive_expr(fsys, ptx, lev);
-    type_mask |= (t == float_ ? 0x2 : 0x0);
-    gen(opr, type_mask, relop);
-    return bool_;
+    if (sym == eql || sym == neq || sym == lss || sym == leq || sym == gtr || sym == geq) {
+        relop = sym;
+        getsym();
+        type_mask |= (this_type == float_ ? 0x1 : 0x0);
+        enum type t = additive_expr(fsys, ptx, lev);
+        type_mask |= (t == float_ ? 0x2 : 0x0);
+        gen(opr, type_mask, relop);
+        return bool_;
+    }
+    return this_type;
 }
 
 enum type additive_expr(bool *fsys, int *ptx, int lev) {
@@ -890,7 +934,7 @@ enum type factor(bool *fsys, int *ptx, int lev) {
                                     memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
                                     nxtlev[rparen] = true;
                                     nxtlev[rbracket] = true;
-                                    simple_expr(nxtlev, ptx, lev);
+                                    clause_or(nxtlev, ptx, lev);
                                     if (sym != rbracket) error(303);
                                     gen(ldx, lev - table[i].level, table[i].adr);
                                 } else error(302);
@@ -920,7 +964,7 @@ enum type factor(bool *fsys, int *ptx, int lev) {
                 getsym();
                 memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
                 nxtlev[rparen] = true;
-                this_type = simple_expr(nxtlev, ptx, lev);
+                this_type = clause_or(nxtlev, ptx, lev);
                 if (sym == rparen) getsym();
                 else error(22);
                 break;
@@ -1043,6 +1087,14 @@ void interpret() {
                     case op_lte:
                         t--;
                         s.i[t] = i.l ? op1.f <= op2.f : op1.i <= op2.i;
+                        break;
+                    case op_lor:
+                        t--;
+                        s.i[t] = op1.i || op2.i;
+                        break;
+                    case op_land:
+                        t--;
+                        s.i[t] = op1.i && op2.i;
                         break;
                     case op_write:
                         switch(i.l) {
