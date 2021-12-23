@@ -57,5 +57,6 @@ int main() {
     run_test("float_opr");
     run_test("bool_opr");
     run_test("cast");
+    run_test("bitwise");
     return 0;
 }

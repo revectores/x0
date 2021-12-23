@@ -120,6 +120,7 @@ void init(){
     ssym['*'] = times;
     ssym['/'] = slash;
     ssym['%'] = mod;
+    ssym['^'] = bxor;
     ssym['('] = lparen;
     ssym[')'] = rparen;
     ssym['='] = becomes;
@@ -341,13 +342,13 @@ void getsym(){
         if (ch == '|') {
             sym = lor;
             getch();
-        } else sym = nul;
+        } else sym = bor;
     } else if (ch == '&') {
         getch();
         if (ch == '&') {
             sym = land;
             getch();
-        } else sym = nul;
+        } else sym = band;
     } else if (ch == '/') {
         getch();
         if (ch == '*') {
@@ -530,6 +531,13 @@ int position(char *id, int tx) {
     i = tx;
     while (strcmp(table[i].name, id) != 0) i--;
     return i;
+}
+
+enum type upcast(enum type t1, enum type t2) {
+    enum type levels[NTYPE] = {bool_, char_, int_, float_};
+    int n = NTYPE;
+    while (n--) if (t1 == levels[n] || t2 == levels[n]) return levels[n];
+    return bool_;
 }
 
 void const_decl(int *ptx, int lev, int *pdx) {
@@ -775,12 +783,60 @@ enum type clause_and(bool *fsys, int *ptx, int lev) {
     bool nxtlev[SYM_CNT];
     memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
     nxtlev[land] = true;
-    this_type = simple_expr(nxtlev, ptx, lev);
+    this_type = bitwise_or(nxtlev, ptx, lev);
     while (sym == land) {
         this_type = bool_;
         getsym();
-        simple_expr(nxtlev, ptx, lev);
+        bitwise_or(nxtlev, ptx, lev);
         gen(opr, 0, op_land);
+    }
+    return this_type;
+}
+
+enum type bitwise_or(bool *fsys, int *ptx, int lev){
+    enum type this_type;
+    bool nxtlev[SYM_CNT];
+    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+    nxtlev[bor] = true;
+    this_type = bitwise_xor(nxtlev, ptx, lev);
+    while (sym == bor) {
+        if (this_type == float_) error(601);
+        getsym();
+        enum type t = bitwise_xor(nxtlev, ptx, lev);
+        this_type = upcast(this_type, t);
+        gen(opr, 0, op_bor);
+    }
+    return this_type;
+}
+
+enum type bitwise_xor(bool *fsys, int *ptx, int lev){
+    enum type this_type;
+    bool nxtlev[SYM_CNT];
+    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+    nxtlev[bxor] = true;
+    this_type = bitwise_and(nxtlev, ptx, lev);
+    while (sym == bxor) {
+        if (this_type == float_) error(601);
+        getsym();
+        enum type t = bitwise_and(nxtlev, ptx, lev);
+        this_type = upcast(this_type, t);
+        gen(opr, 0, op_xor);
+    }
+    return this_type;
+}
+
+enum type bitwise_and(bool *fsys, int *ptx, int lev){
+    enum type this_type;
+    bool nxtlev[SYM_CNT];
+    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+    nxtlev[band] = true;
+    this_type = simple_expr(nxtlev, ptx, lev);
+    while (sym == band) {
+        if (this_type == float_) error(601);
+        getsym();
+        enum type t = simple_expr(nxtlev, ptx, lev);
+        this_type = upcast(this_type, t);
+        gen(opr, 0, op_band);
     }
     return this_type;
 }
@@ -839,8 +895,7 @@ enum type additive_expr(bool *fsys, int *ptx, int lev) {
         nxtlev[minus] = true;
         enum type t = term(nxtlev, ptx, lev);
         type_mask |= (this_type == float_ ? 0x2 : 0x0);
-        if (t == float_ || this_type == float_) this_type = float_;
-        else if (t == int_ || this_type == int_) this_type = int_;
+        this_type = upcast(this_type, t);
         gen(opr, type_mask, 2 + (addop == minus));
     }
     return this_type;
@@ -864,8 +919,7 @@ enum type term(bool *fsys, int *ptx, int lev) {
         getsym();
         enum type t = unary(nxtlev, ptx, lev);
         type_mask |= (t == float_ ? 0x2 : 0x0);
-        if (t == float_ || this_type == float_) this_type = float_;
-        else if (t == int_ || this_type == int_) this_type = int_;
+        this_type = upcast(this_type, t);
         printf("type_mask = %d\n", type_mask);
         switch (mulop) {
             case times:
@@ -1098,6 +1152,18 @@ void interpret() {
                     case op_land:
                         t--;
                         s.i[t] = op1.i && op2.i;
+                        break;
+                    case op_bor:
+                        t--;
+                        s.i[t] = op1.i | op2.i;
+                        break;
+                    case op_xor:
+                        t--;
+                        s.i[t] = op1.i ^ op2.i;
+                        break;
+                    case op_band:
+                        t--;
+                        s.i[t] = op1.i & op2.i;
                         break;
                     case op_cast:
                         switch (i.l) {
