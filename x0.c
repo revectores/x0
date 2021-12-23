@@ -731,7 +731,8 @@ enum type expression(bool* fsys, int *ptx, int lev) {
                     memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
                     nxtlev[rparen] = true;
                     nxtlev[rbracket] = true;
-                    clause_or(nxtlev, ptx, lev);
+                    enum type t = clause_or(nxtlev, ptx, lev);
+                    if (t == float_) error(600);
                     if (sym == rbracket) getsym();
                     else error(303);
                 } else error(500);
@@ -740,7 +741,9 @@ enum type expression(bool* fsys, int *ptx, int lev) {
             if (sym == becomes) {
                 getsym();
                 memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-                clause_or(nxtlev, ptx, lev);
+                enum type t = clause_or(nxtlev, ptx, lev);
+                if (this_type == float_ && t != float_) gen(opr, itof, op_cast);
+                if (this_type != float_ && t == float_) gen(opr, ftoi, op_cast);
                 if (is_array) {
                     gen(stx, lev - table[i].level, table[i].adr);
                 } else {
@@ -1026,8 +1029,8 @@ void interpret() {
                 break;
             case opr:
                 if (i.l) {
-                    if (i.l & 0x1) op1.f = (i.l & 0x1) ? s.f[t - 1] : (float)s.i[t - 1];
-                    if (i.l & 0x2) op2.f = (i.l & 0x2) ? s.f[t] : (float)s.i[t];
+                    op1.f = (i.l & 0x1) ? s.f[t - 1] : (float)s.i[t - 1];
+                    op2.f = (i.l & 0x2) ? s.f[t] : (float)s.i[t];
                 } else {
                     op1.i = s.i[t - 1];
                     op2.i = s.i[t];
@@ -1095,6 +1098,19 @@ void interpret() {
                     case op_land:
                         t--;
                         s.i[t] = op1.i && op2.i;
+                        break;
+                    case op_cast:
+                        switch (i.l) {
+                            case itof:
+                                s.f[t] = (float)s.i[t];
+                                break;
+                            case ftoi:
+                                s.i[t] = (int)s.f[t];
+                                break;
+                            default:
+                                runtime_error(3);
+                                break;
+                        }
                         break;
                     case op_write:
                         switch(i.l) {

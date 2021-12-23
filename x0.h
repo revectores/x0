@@ -54,10 +54,14 @@ enum opcode {
     op_ret, op_rev,  op_add, op_sub,  op_mul,
     op_div, op_odd,          op_eq=8, op_neq,
     op_lt,  op_gte,  op_gt,  op_lte,  op_write,
-    op_lf,  op_read, op_mod, op_lor,  op_land
+    op_lf,  op_read, op_mod, op_lor,  op_land,
+    op_cast,
 };
 enum io {
     io_bool, io_char, io_float, io_int
+};
+enum cast {
+    itof, ftoi
 };
 
 bool list_switch;
