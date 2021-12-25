@@ -970,6 +970,13 @@ enum type unary(bool *fsys, int *ptx, int lev) {
             this_type = t;
             gen(opr, 0, op_sub);
             break;
+        case odd_sym:
+            getsym();
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            factor(nxtlev, ptx, lev);
+            gen(opr, 0, op_odd);
+            this_type = bool_;
+            break;
         default:
             error(301);
             break;

@@ -59,7 +59,10 @@ int run_tests() {
     run_test("bool_opr");
     run_test("bitwise");
     run_test("mod");
+    run_test("odd");
     run_test("expression");
+
+    run_test("proc");
     return 0;
 }
 
