@@ -14,7 +14,7 @@ char symbol_words[SYM_CNT][10] = {
         "write_sym", "read_sym", "do_sym",    "call_sym", "const_sym",
         "var_sym",   "proc_sym", "main_sym",  "type_sym", "lbracket",
         "rbracket",  "else_sym", "mod",       "not_sym",  "lor",
-        "land",
+        "land",      "bor",      "band",      "bxor",     "for_sym",
 };
 
 char type_word[NTYPE][10] = {
@@ -150,29 +150,31 @@ void init(){
     strcpy(&(word[1][0]), "const");
     strcpy(&(word[2][0]), "do");
     strcpy(&(word[3][0]), "else");
-    strcpy(&(word[4][0]), "if");
-    strcpy(&(word[5][0]), "main");
-    strcpy(&(word[6][0]), "odd");
-    strcpy(&(word[7][0]), "procedure");
-    strcpy(&(word[8][0]), "read");
-    strcpy(&(word[9][0]), "then");
-    strcpy(&(word[10][0]), "var");
-    strcpy(&(word[11][0]), "while");
-    strcpy(&(word[12][0]), "write");
+    strcpy(&(word[4][0]), "for");
+    strcpy(&(word[5][0]), "if");
+    strcpy(&(word[6][0]), "main");
+    strcpy(&(word[7][0]), "odd");
+    strcpy(&(word[8][0]), "procedure");
+    strcpy(&(word[9][0]), "read");
+    strcpy(&(word[10][0]), "then");
+    strcpy(&(word[11][0]), "var");
+    strcpy(&(word[12][0]), "while");
+    strcpy(&(word[13][0]), "write");
 
     wsym[0] = call_sym;
     wsym[1] = const_sym;
     wsym[2] = do_sym;
     wsym[3] = else_sym;
-    wsym[4] = if_sym;
-    wsym[5] = main_sym;
-    wsym[6] = odd_sym;
-    wsym[7] = proc_sym;
-    wsym[8] = read_sym;
-    wsym[9] = then_sym;
-    wsym[10] = var_sym;
-    wsym[11] = while_sym;
-    wsym[12] = write_sym;
+    wsym[4] = for_sym;
+    wsym[5] = if_sym;
+    wsym[6] = main_sym;
+    wsym[7] = odd_sym;
+    wsym[8] = proc_sym;
+    wsym[9] = read_sym;
+    wsym[10] = then_sym;
+    wsym[11] = var_sym;
+    wsym[12] = while_sym;
+    wsym[13] = write_sym;
 
     strcpy(&(mnemonic[lit][0]), "lit");
     strcpy(&(mnemonic[opr][0]), "opr");
@@ -202,6 +204,7 @@ void init(){
     statbegsys[read_sym]  = true;
     statbegsys[write_sym] = true;
     statbegsys[ident]     = true;
+    statbegsys[for_sym]   = true;
 
     factbegsys[ident]  = true;
     factbegsys[number] = true;
@@ -612,7 +615,7 @@ void list_all() {
 }
 
 void statement(bool *fsys, int *ptx, int lev) {
-    int i, cx1, cx2;
+    int i, cx1, cx2, cx3, cx4, cx5;
     bool nxtlev[SYM_CNT];
     enum type t;
 
@@ -717,6 +720,34 @@ void statement(bool *fsys, int *ptx, int lev) {
 
             statement(fsys, ptx, lev);
             gen(jmp, 0, cx1);
+            code[cx2].a = cx;
+            break;
+        case for_sym:
+            getsym();
+            if (sym == lparen) getsym();
+            else error(50);
+
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            nxtlev[semicolon] = true;
+            expression(nxtlev, ptx, lev);
+            cx1 = cx;
+            if (sym == semicolon) getsym(); else error(5);
+            clause_or(nxtlev, ptx, lev);
+            if (sym == semicolon) getsym(); else error(5);
+            cx2 = cx;
+            gen(jpc, 0, 0);
+            cx3 = cx;
+            gen(jmp, 0, 0);
+            nxtlev[semicolon] = false;
+            nxtlev[rparen] = true;
+            cx4 = cx;
+            expression(nxtlev, ptx, lev);
+            gen(jmp, 0, cx1);
+            if (sym == rparen) getsym(); else error(51);
+
+            code[cx3].a = cx;
+            statement(fsys, ptx, lev);
+            gen(jmp, 0, cx4);
             code[cx2].a = cx;
             break;
         default:

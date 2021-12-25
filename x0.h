@@ -6,7 +6,7 @@
 #ifndef PL0_GEN_X0_H
 #define PL0_GEN_X0_H
 
-#define NROW 13
+#define NROW 14
 #define TXMAX 100
 #define NMAX 14
 #define AL 10
@@ -26,9 +26,9 @@ enum symbol {
     write_sym, read_sym, do_sym,    call_sym, const_sym,
     var_sym,   proc_sym, main_sym,  type_sym, lbracket,
     rbracket,  else_sym, mod,       not_sym,  lor,
-    land,      bor,      band,      bxor
+    land,      bor,      band,      bxor,     for_sym,
 };
-#define SYM_CNT 44
+#define SYM_CNT 45
 
 enum object {
     constant, variable, procedure

@@ -62,6 +62,7 @@ int run_tests() {
     run_test("odd");
     run_test("expression");
 
+    run_test("for");
     run_test("proc");
     return 0;
 }
