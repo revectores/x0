@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <signal.h>
 #include "x0.h"
 
 char symbol_words[SYM_CNT][10] = {
@@ -29,10 +30,11 @@ void dump_sym() {
     printf("current sym: %s\n", symbol_words[sym]);
 }
 
-void compile_and_run(char *fname) {
+void compile_and_run(char *source, char *path, bool step_mode) {
+    char fname[200];
     bool nxtlev[SYM_CNT];
 
-    if (!(fin = fopen(fname, "r"))) {
+    if (!(fin = fopen(source, "r"))) {
         printf("cannot open the input file\n");
         exit(1);
     }
@@ -45,14 +47,24 @@ void compile_and_run(char *fname) {
     }
     rewind(fin);
 
-    if (!(fout = fopen("fout.txt", "w"))) {
+    snprintf(fname, sizeof(fname), "%s/%s", path, "fout.txt");
+    if (!(fout = fopen(fname, "w"))) {
         printf("cannot open the output file\n");
         exit(1);
     }
 
-    if (!(ftable = fopen("ftable.txt", "w"))) {
+    snprintf(fname, sizeof(fname), "%s/%s", path, "ftable.txt");
+    if (!(ftable = fopen(fname, "w"))) {
         printf("cannot open ftable.txt file\n");
         exit(1);
+    }
+
+    if (step_mode) {
+        snprintf(fname, sizeof(fname), "%s/%s", path, "fstack.txt");
+        if (!(fstack = fopen(fname, "w"))) {
+            printf("cannot open fstack.txt file\n");
+            exit(1);
+        }
     }
 
 //    printf("list object code?(y/n)");
@@ -85,11 +97,13 @@ void compile_and_run(char *fname) {
         printf("\n===Parsing success!===\n");
         fprintf(fout, "\n===Parsing success!===\n");
 
-        if (!(fcode = fopen("fcode.txt", "w"))) {
+        snprintf(fname, sizeof(fname), "%s/%s", path, "fcode.txt");
+        if (!(fcode = fopen(fname, "w"))) {
             printf("cannot open fcode.txt\n");
             exit(1);
         }
-        if (!(fresult = fopen("fresult.txt", "w"))) {
+        snprintf(fname, sizeof(fname), "%s/%s", path, "fresult.txt");
+        if (!(fresult = fopen(fname, "w"))) {
             printf("cannot open fresult.txt\n");
             exit(1);
         }
@@ -97,7 +111,7 @@ void compile_and_run(char *fname) {
         list_all();
         fclose(fcode);
 
-        interpret();
+        interpret(step_mode);
         fclose(fresult);
     } else {
         printf("\n===%d errors in PL/0 program!===\n", err);
@@ -222,7 +236,7 @@ void error(int n){
     fprintf(fout, "%s ^ %d\n", space, n);
 
     err = err + 1;
-    if (err > MAXERR) exit(1);
+    if (err > MAXERR) exit(2);
 }
 
 
@@ -230,7 +244,7 @@ void getch() {
     if (cc == ll) {
         if (feof(fin)) {
             printf("Program incomplete!\n");
-            exit(1);
+            exit(3);
         }
         ll = 0;
         cc = 0;
@@ -279,9 +293,6 @@ void getsym(){
             if (strcmp(id, word[k]) >= 0) i = k + 1;
         } while (i <= j);
 
-        // printf("i: %d, j: %d, k: %d ", i, j, k);
-        // if (i - 1 > j) printf("wsym[%d] = %d\n\n", k, wsym[k]);
-        // else printf("\n\n");
         if (i - 1 > j) sym = wsym[k];
         else {
             i = 0;
@@ -375,12 +386,12 @@ void getsym(){
 void gen(enum fct f, int l, int a) {
     if (cx >= MAX_CX) {
         printf("program too long\n");
-        exit(1);
+        exit(4);
     }
 
     if (a >= MAX_ADDR) {
         printf("address overflow\n");
-        exit(1);
+        exit(5);
     }
     code[cx].f = f;
     code[cx].l = l;
@@ -1010,8 +1021,8 @@ enum type factor(bool *fsys, int *ptx, int lev) {
                 break;
             case number:
                 if (num > MAX_ADDR) {
-                   error(31);
-                   num = 0;
+                    error(31);
+                    num = 0;
                 }
                 gen(lit, 0, num);
                 this_type = int_;
@@ -1046,10 +1057,10 @@ void dump_stack(int *s, int t) {
 
 void runtime_error(int error_code) {
     printf("runtime error: %d\n", error_code);
-    exit(1);
+    exit(6);
 }
 
-void interpret() {
+void interpret(bool step_mode) {
     int p = 0;
     int b = 1;
     int t = 0;
@@ -1061,6 +1072,9 @@ void interpret() {
         float* f;
     } s;
     s.p = malloc(sizeof(int[STACK_SIZE]));
+    enum type st[STACK_SIZE];
+    for (int c = 0; c < STACK_SIZE; c++) st[c] = int_;
+
     union {
         int i;
         float f;
@@ -1070,12 +1084,38 @@ void interpret() {
     fprintf(fresult, "start pl0\n");
     memset(s.p, 0, sizeof(int[4]));
 
+    sigset_t set;
+    int sig = 0;
+    sigemptyset(&set);
+    sigaddset(&set, SIGCONT);
+
     do {
         // printf("p = %d\n", p);
         // fflush(NULL);
         i = code[p];
         // printf("after code %s %d %d\n", mnemonic[code[p].f], code[p].l, code[p].a);
         p++;
+
+        if (step_mode) {
+            // pause();
+            sigwait(&set, &sig);
+            freopen(NULL, "w", fstack);
+            for (int c = 0; c <= t; c++) {
+                switch (st[c]) {
+                    case int_:
+                    case bool_:
+                    case char_:
+                        fprintf(fstack, "%d\n", s.i[c]);
+                        break;
+                    case float_:
+                        fprintf(fstack, "%f\n", s.f[c]);
+                        break;
+                }
+            }
+            printf("#p#%d\n", p - 1);
+            fflush(NULL);
+        }
+
         switch (i.f) {
             case lit:
                 t++;
@@ -1083,6 +1123,7 @@ void interpret() {
                 break;
             case opr:
                 if (i.l) {
+                    st[t - 1] = float_;
                     op1.f = (i.l & 0x1) ? s.f[t - 1] : (float)s.i[t - 1];
                     op2.f = (i.l & 0x2) ? s.f[t] : (float)s.i[t];
                 } else {
@@ -1168,9 +1209,11 @@ void interpret() {
                     case op_cast:
                         switch (i.l) {
                             case itof:
+                                st[t] = float_;
                                 s.f[t] = (float)s.i[t];
                                 break;
                             case ftoi:
+                                st[t] = int_;
                                 s.i[t] = (int)s.f[t];
                                 break;
                             default:
@@ -1225,6 +1268,7 @@ void interpret() {
                                 fprintf(fresult, "%s\n", s.i[t] ? "true" : "false");
                                 break;
                             case io_float:
+                                st[t] = float_;
                                 scanf("%f", &s.f[t]);
                                 fprintf(fresult, "%f\n", s.f[t]);
                                 break;
@@ -1235,12 +1279,14 @@ void interpret() {
             case lod:
                 t += 1;
                 s.i[t] = s.i[base(i.l, s.i, b) + i.a];
+                st[t] = st[base(i.l, s.i, b) + i.a];
                 break;
             case ldx:
                 s.i[t] = s.i[base(i.l, s.i, b) + i.a + s.i[t]];
                 break;
             case sto:
                 s.i[base(i.l, s.i, b) + i.a] = s.i[t];
+                st[base(i.l, s.i, b) + i.a] = st[t];
                 t -= 1;
                 break;
             case stx:

@@ -104,6 +104,7 @@ FILE* ftable;
 FILE* fcode;
 FILE* fout;
 FILE* fresult;
+FILE* fstack;
 int err;
 
 
@@ -112,7 +113,7 @@ void getsym();
 void getch();
 void init();
 void gen(enum fct f, int l, int a);
-void interpret();
+void interpret(bool step_mode);
 void test(bool *s1, bool *s2, int n);
 int inset(int e, const bool *s);
 int addset(bool *sr, const bool *s1, const bool *s2, int n);
@@ -125,7 +126,7 @@ void enter(enum object k, int *ptx, int lev, int *pdx);
 enum type upcast(enum type t1, enum type t2);
 int base(int l, int *s, int b);
 
-void compile_and_run(char *fname);
+void compile_and_run(char *fname, char *path, bool step_mode);
 void block(int lev, int tx, bool *fsys);
 void statement(bool *fsys, int *ptx, int lev);
 enum type expression(bool *fsys, int *ptx, int lev);

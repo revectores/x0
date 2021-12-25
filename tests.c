@@ -39,24 +39,30 @@ void run_test(char *name) {
     sprintf(fname, "../tests/test_%s/test_%s_input.txt", name, name);
     freopen(fname, "r", stdin);
     sprintf(fname, "../tests/test_%s/test_%s.pl0", name, name);
-    compile_and_run(fname);
+    compile_and_run(fname, ".", false);
     assert(err == 0);
     sprintf(fname, "../tests/test_%s/test_%s_fresult.txt", name, name);
     assert(is_identical(fname, "fresult.txt"));
 }
 
-int main() {
+int run_tests() {
     run_test("empty");
-    run_test("expression");
     run_test("comment");
-    run_test("mod");
+
     run_test("int_io");
     run_test("bool_io");
     run_test("char_io");
     run_test("float_io");
+    run_test("cast");
+
     run_test("float_opr");
     run_test("bool_opr");
-    run_test("cast");
     run_test("bitwise");
+    run_test("mod");
+    run_test("expression");
     return 0;
+}
+
+int main() {
+    run_tests();
 }

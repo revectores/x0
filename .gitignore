@@ -1,6 +1,7 @@
+cmake-build-debug
 .idea
 .DS_Store
-cmake-build-debug
-a.out
-*.txt
+*.o
 *.pl0
+*.txt
+!CMakeLists.txt
