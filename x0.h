@@ -126,10 +126,11 @@ void enter(enum object k, int *ptx, int lev, int *pdx);
 enum type upcast(enum type t1, enum type t2);
 int base(int l, int *s, int b);
 
-void compile_and_run(char *fname, char *path, bool step_mode);
+int compile_and_run(char *fname, char *path, bool step_mode);
 void block(int lev, int tx, bool *fsys);
 void statement(bool *fsys, int *ptx, int lev);
 enum type expression(bool *fsys, int *ptx, int lev);
+enum type var(bool *fsys, int *ptx, int lev);
 enum type clause_or(bool *fsys, int *ptx, int lev);
 enum type clause_and(bool *fsys, int *ptx, int lev);
 enum type bitwise_or(bool *fsys, int *ptx, int lev);

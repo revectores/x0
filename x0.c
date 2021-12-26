@@ -30,7 +30,7 @@ void dump_sym() {
     printf("current sym: %s\n", symbol_words[sym]);
 }
 
-void compile_and_run(char *source, char *path, bool step_mode) {
+int compile_and_run(char *source, char *path, bool step_mode) {
     char fname[200];
     bool nxtlev[SYM_CNT];
 
@@ -121,6 +121,8 @@ void compile_and_run(char *source, char *path, bool step_mode) {
     fclose(ftable);
     fclose(fout);
     fclose(fin);
+
+    return err;
 }
 
 
@@ -760,10 +762,8 @@ void statement(bool *fsys, int *ptx, int lev) {
 
 enum type expression(bool* fsys, int *ptx, int lev) {
     enum type this_type = int_;
-    int i;
-    bool is_array;
     bool nxtlev[SYM_CNT];
-    i = position(id, *ptx);
+    int i = position(id, *ptx);
 
     if (i == 0) error(11);
     else {
@@ -771,22 +771,9 @@ enum type expression(bool* fsys, int *ptx, int lev) {
             error(12);
             i = 0;
         } else {
-            this_type = table[i].type;
-            getsym();
-            is_array = false;
-            if (sym == lbracket) {
-                is_array = true;
-                if (table[i].size) {
-                    getsym();
-                    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-                    nxtlev[rparen] = true;
-                    nxtlev[rbracket] = true;
-                    enum type t = clause_or(nxtlev, ptx, lev);
-                    if (t == float_) error(600);
-                    if (sym == rbracket) getsym();
-                    else error(303);
-                } else error(500);
-            }
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            nxtlev[becomes] = true;
+            this_type = var(nxtlev, ptx, lev);
 
             if (sym == becomes) {
                 getsym();
@@ -794,13 +781,33 @@ enum type expression(bool* fsys, int *ptx, int lev) {
                 enum type t = clause_or(nxtlev, ptx, lev);
                 if (this_type == float_ && t != float_) gen(opr, itof, op_cast);
                 if (this_type != float_ && t == float_) gen(opr, ftoi, op_cast);
-                if (is_array) {
-                    gen(stx, lev - table[i].level, table[i].adr);
-                } else {
-                    gen(sto, lev - table[i].level, table[i].adr);
-                }
+                gen(table[i].size ? stx : sto, lev - table[i].level, table[i].adr);
             } else error(17);
         }
+    }
+    return this_type;
+}
+
+enum type var(bool *fsys, int *ptx, int lev) {
+    bool nxtlev[SYM_CNT];
+    int i = position(id, *ptx);
+    enum type this_type = table[i].type;
+    getsym();
+    if (sym == lbracket) {
+        if (table[i].size) {
+            getsym();
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            nxtlev[rparen] = true;
+            nxtlev[rbracket] = true;
+            enum type t = clause_or(nxtlev, ptx, lev);
+            if (t == float_) error(600);
+            // TODO: Implement bounds checking here.
+            //  Throw a runtime error if the bounds checking failed.
+            if (sym == rbracket) getsym();
+            else error(303);
+        } else error(500);
+    } else {
+        if (table[i].size) error(501);
     }
     return this_type;
 }
@@ -1031,31 +1038,19 @@ enum type factor(bool *fsys, int *ptx, int lev) {
                         case constant:
                             gen(lit, 0, table[i].val);
                             this_type = table[i].type;
+                            getsym();
                             break;
                         case variable:
-                            if (table[i].size) {
-                                getsym();
-                                if (sym == lbracket) {
-                                    getsym();
-                                    memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-                                    nxtlev[rparen] = true;
-                                    nxtlev[rbracket] = true;
-                                    clause_or(nxtlev, ptx, lev);
-                                    if (sym != rbracket) error(303);
-                                    gen(ldx, lev - table[i].level, table[i].adr);
-                                } else error(302);
-                            } else {
-                                printf("lod %d %d\n", lev - table[i].level, table[i].adr);
-                                gen(lod, lev - table[i].level, table[i].adr);
-                            }
-                            this_type = table[i].type;
+                            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+                            this_type = var(nxtlev, ptx, lev);
+                            gen(table[i].size ? ldx : lod, lev - table[i].level, table[i].adr);
                             break;
                         case procedure:
                             error(21);
+                            getsym();
                             break;
                     }
                 }
-                getsym();
                 break;
             case number:
                 if (num > MAX_ADDR) {

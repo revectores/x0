@@ -4,4 +4,5 @@ cmake-build-debug
 *.o
 *.pl0
 *.txt
+*.sh
 !CMakeLists.txt

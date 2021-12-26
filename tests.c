@@ -39,10 +39,14 @@ void run_test(char *name) {
     sprintf(fname, "../tests/test_%s/test_%s_input.txt", name, name);
     freopen(fname, "r", stdin);
     sprintf(fname, "../tests/test_%s/test_%s.pl0", name, name);
-    compile_and_run(fname, ".", false);
-    assert(err == 0);
-    sprintf(fname, "../tests/test_%s/test_%s_fresult.txt", name, name);
-    assert(is_identical(fname, "fresult.txt"));
+    int e = compile_and_run(fname, ".", false);
+    if (e == 0) {
+        sprintf(fname, "../tests/test_%s/test_%s_fresult.txt", name, name);
+        assert(is_identical(fname, "fresult.txt"));
+    } else {
+        sprintf(fname, "../tests/test_%s/test_%s_fout.txt", name, name);
+        assert(is_identical(fname, "fout.txt"));
+    }
 }
 
 int run_tests() {
@@ -54,6 +58,9 @@ int run_tests() {
     run_test("char_io");
     run_test("float_io");
     run_test("cast");
+
+    run_test("array");
+    run_test("array_2");
 
     run_test("float_opr");
     run_test("bool_opr");
