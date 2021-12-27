@@ -6,7 +6,7 @@
 #ifndef PL0_GEN_X0_H
 #define PL0_GEN_X0_H
 
-#define NROW 14
+#define NROW 15
 #define TXMAX 100
 #define NMAX 14
 #define AL 10
@@ -24,20 +24,21 @@ enum symbol {
     rparen,    comma,    semicolon, period,   becomes,
     begin_sym, end_sym,  if_sym,    then_sym, while_sym,
     write_sym, read_sym, do_sym,    call_sym, const_sym,
-    var_sym,   proc_sym, main_sym,  type_sym, lbracket,
+    var_sym,   func_sym, main_sym,  type_sym, lbracket,
     rbracket,  else_sym, mod,       not_sym,  lor,
     land,      bor,      band,      bxor,     for_sym,
+    arrow,     return_sym,
 };
-#define SYM_CNT 45
+#define SYM_CNT 47
 
 enum object {
-    constant, variable, procedure
+    constant, variable, function, argument
 };
 
 enum type {
-    bool_, char_, float_, int_
+    bool_, char_, float_, int_, void_
 };
-#define NTYPE 4
+#define NTYPE 5
 
 enum fct {
     lit, opr, lod, sto, cal, ini, jmp, jpc, ldx, stx,
@@ -141,8 +142,10 @@ enum type simple_expr(bool *fsys, int *ptx, int lev);
 enum type term(bool *fsys, int *ptx, int lev);
 enum type unary(bool *fsys, int *ptx, int lev);
 enum type factor(bool *fsys, int *ptx, int lev);
+void func(bool *fsys, int *ptx, int lev);
 void var_decl(int *ptx, int lev, int *pdx);
 void const_decl(int *ptx, int lev, int *pdx);
+void arg_decl(int *ptx, int lev, int *argc);
 
 
 #endif

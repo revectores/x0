@@ -12,13 +12,14 @@ char symbol_words[SYM_CNT][10] = {
         "rparen",    "comma",    "semicolon", "period",   "becomes",
         "begin_sym", "end_sym",  "if_sym",    "then_sym", "while_sym",
         "write_sym", "read_sym", "do_sym",    "call_sym", "const_sym",
-        "var_sym",   "proc_sym", "main_sym",  "type_sym", "lbracket",
+        "var_sym",   "func_sym", "main_sym",  "type_sym", "lbracket",
         "rbracket",  "else_sym", "mod",       "not_sym",  "lor",
         "land",      "bor",      "band",      "bxor",     "for_sym",
+        "arrow",     "return_sym"
 };
 
 char type_word[NTYPE][10] = {
-        "bool", "char", "float", "int"
+        "bool", "char", "float", "int", "void"
 };
 
 void dump_set(const bool *s) {
@@ -153,30 +154,32 @@ void init(){
     strcpy(&(word[2][0]), "do");
     strcpy(&(word[3][0]), "else");
     strcpy(&(word[4][0]), "for");
-    strcpy(&(word[5][0]), "if");
-    strcpy(&(word[6][0]), "main");
-    strcpy(&(word[7][0]), "odd");
-    strcpy(&(word[8][0]), "procedure");
+    strcpy(&(word[5][0]), "func");
+    strcpy(&(word[6][0]), "if");
+    strcpy(&(word[7][0]), "main");
+    strcpy(&(word[8][0]), "odd");
     strcpy(&(word[9][0]), "read");
-    strcpy(&(word[10][0]), "then");
-    strcpy(&(word[11][0]), "var");
-    strcpy(&(word[12][0]), "while");
-    strcpy(&(word[13][0]), "write");
+    strcpy(&(word[10][0]), "return");
+    strcpy(&(word[11][0]), "then");
+    strcpy(&(word[12][0]), "var");
+    strcpy(&(word[13][0]), "while");
+    strcpy(&(word[14][0]), "write");
 
     wsym[0] = call_sym;
     wsym[1] = const_sym;
     wsym[2] = do_sym;
     wsym[3] = else_sym;
     wsym[4] = for_sym;
-    wsym[5] = if_sym;
-    wsym[6] = main_sym;
-    wsym[7] = odd_sym;
-    wsym[8] = proc_sym;
+    wsym[5] = func_sym;
+    wsym[6] = if_sym;
+    wsym[7] = main_sym;
+    wsym[8] = odd_sym;
     wsym[9] = read_sym;
-    wsym[10] = then_sym;
-    wsym[11] = var_sym;
-    wsym[12] = while_sym;
-    wsym[13] = write_sym;
+    wsym[10] = return_sym;
+    wsym[11] = then_sym;
+    wsym[12] = var_sym;
+    wsym[13] = while_sym;
+    wsym[14] = write_sym;
 
     strcpy(&(mnemonic[lit][0]), "lit");
     strcpy(&(mnemonic[opr][0]), "opr");
@@ -197,7 +200,7 @@ void init(){
 
     declbegsys[const_sym] = true;
     declbegsys[var_sym]   = true;
-    declbegsys[proc_sym]  = true;
+    declbegsys[func_sym]  = true;
 
     statbegsys[begin_sym] = true;
     statbegsys[call_sym]  = true;
@@ -365,6 +368,12 @@ void getsym(){
             sym = land;
             getch();
         } else sym = band;
+    } else if (ch == '-') {
+        getch();
+        if (ch == '>') {
+            sym = arrow;
+            getch();
+        } else sym = minus;
     } else if (ch == '/') {
         getch();
         if (ch == '*') {
@@ -416,12 +425,31 @@ void block(int lev, int tx, bool *fsys){
     int dx = 3;
     int tx0 = tx;
     int cx0;
+    int argc = 0;
     bool nxtlev[SYM_CNT];
 
     table[tx].adr = cx;
     gen(jmp, 0, 0);
     if (lev > MAX_LEVEL) error(32);
 
+    table[tx0].type = void_;
+    if (sym == lparen) {
+        do {
+            getsym();
+            if (sym != type_sym) error(703);
+            getsym();
+            arg_decl(&tx, lev, &argc);
+            argc += 1;
+        } while (sym == comma);
+        for (int c = 0; c < argc; c++) table[tx - c].adr -= argc + 1;
+        if (sym == rparen) getsym(); else error(701);
+    }
+    if (sym == arrow) {
+        getsym();
+        if (sym == type_sym) table[tx0].type = type;
+        else error(703);
+        getsym();
+    }
     if (sym == begin_sym) getsym(); else error(100);
 
     do {
@@ -441,10 +469,10 @@ void block(int lev, int tx, bool *fsys){
             else error(5);
         }
 
-        while (sym == proc_sym) {
+        while (sym == func_sym) {
             getsym();
             if (sym == ident) {
-                enter(procedure, &tx, lev, &dx);
+                enter(function, &tx, lev, &dx);
                 getsym();
             } else error(4);
 
@@ -455,7 +483,7 @@ void block(int lev, int tx, bool *fsys){
                 getsym();
                 memcpy(nxtlev, statbegsys, sizeof(bool[SYM_CNT]));
                 nxtlev[ident] = true;
-                nxtlev[proc_sym] = true;
+                nxtlev[func_sym] = true;
                 test(nxtlev, fsys, 6);
             } else error(5);
         }
@@ -463,6 +491,7 @@ void block(int lev, int tx, bool *fsys){
         memcpy(nxtlev, statbegsys, sizeof(bool[SYM_CNT]));
         nxtlev[ident] = true;
         nxtlev[end_sym] = true;
+        nxtlev[return_sym] = true;
         test(nxtlev, declbegsys, 7);
     } while (inset(sym, declbegsys));
 
@@ -487,10 +516,10 @@ void block(int lev, int tx, bool *fsys){
                     fprintf(ftable, "    %d var %s ", i, table[i].name);
                     fprintf(ftable, "lev = %d, addr = %d, type = %s, size = %d\n", table[i].level, table[i].adr, type_word[table[i].type], table[i].size);
                     break;
-                case procedure:
-                    printf("    %d proc %s ", i, table[i].name);
+                case function:
+                    printf("    %d func %s ", i, table[i].name);
                     printf("lev = %d, addr = %d, size = %d\n", table[i].level, table[i].adr, table[i].size);
-                    fprintf(ftable, "    %d proc %s ", i, table[i].name);
+                    fprintf(ftable, "    %d func %s ", i, table[i].name);
                     fprintf(ftable, "lev = %d, addr = %d, size = %d\n", table[i].level, table[i].adr, table[i].size);
                     break;
             }
@@ -500,12 +529,25 @@ void block(int lev, int tx, bool *fsys){
     }
 
     memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-    nxtlev[semicolon] = true;
-    nxtlev[end_sym]   = true;
+    nxtlev[semicolon]  = true;
+    nxtlev[end_sym]    = true;
+    nxtlev[return_sym] = true;
     statement(nxtlev, &tx, lev);
 
     while (inset(sym, statbegsys)) {
         statement(nxtlev, &tx, lev);
+    }
+    if (sym == return_sym) {
+        getsym();
+        enum type t = clause_or(nxtlev, &tx, lev);
+        printf("ttttt = %d %d\n", t, table[tx0].type);
+        if (t != float_ && table[tx0].type == float_) {
+            printf("!!!!\n");
+            gen(opr, itof, op_cast);
+        }
+        if (t == float_ && table[tx0].type != float_) gen(opr, ftoi, op_cast);
+        gen(sto, 0, 0 - 1 - argc - 1);
+        getsym();
     }
     gen(opr, 0, 0);
     memset(nxtlev, 0, sizeof(bool[SYM_CNT]));
@@ -535,8 +577,14 @@ void enter(enum object k, int *ptx, int lev, int *pdx) {
             table[*ptx].size = size;
             *pdx += size ? size : 1;
             break;
-        case procedure:
+        case function:
             table[*ptx].level = lev;
+            break;
+        case argument:
+            table[*ptx].level = lev;
+            table[*ptx].adr = *pdx;
+            table[*ptx].type = type;
+            table[*ptx].size = 0;
             break;
     }
 }
@@ -550,8 +598,8 @@ int position(char *id, int tx) {
 }
 
 enum type upcast(enum type t1, enum type t2) {
-    enum type levels[NTYPE] = {bool_, char_, int_, float_};
-    int n = NTYPE;
+    enum type levels[NTYPE - 1] = {bool_, char_, int_, float_};
+    int n = NTYPE - 1;
     while (n--) if (t1 == levels[n] || t2 == levels[n]) return levels[n];
     return bool_;
 }
@@ -596,6 +644,13 @@ void var_decl(int *ptx, int lev, int *pdx) {
     } else {
         error(4);
     }
+}
+
+void arg_decl(int *ptx, int lev, int *argc) {
+    if (sym == ident) {
+        getsym();
+        enter(argument, ptx, lev, argc);
+    } else error(4);
 }
 
 void list_code(int cx0) {
@@ -658,10 +713,14 @@ void statement(bool *fsys, int *ptx, int lev) {
 
                 if (i == 0) error(11);
                 else {
-                    if (table[i].kind == procedure) gen(cal, lev - table[i].level, table[i].adr);
+                    if (table[i].kind == function) {
+                        memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+                        // gen(lit, 0, 0);
+                        func(nxtlev, ptx, lev);
+                        gen(cal, lev - table[i].level, table[i].adr);
+                    }
                     else error(15);
                 }
-                getsym();
                 if (sym == semicolon) getsym();
                 else error(5);
             }
@@ -767,7 +826,7 @@ enum type expression(bool* fsys, int *ptx, int lev) {
 
     if (i == 0) error(11);
     else {
-        if (table[i].kind != variable) {
+        if (table[i].kind != variable && table[i].kind != argument) {
             error(12);
             i = 0;
         } else {
@@ -996,6 +1055,7 @@ enum type unary(bool *fsys, int *ptx, int lev) {
         case ident:
         case number:
         case lparen:
+        // case return_sym:
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             this_type = factor(nxtlev, ptx, lev);
             break;
@@ -1016,7 +1076,7 @@ enum type unary(bool *fsys, int *ptx, int lev) {
             this_type = bool_;
             break;
         default:
-            error(301);
+            error(355);
             break;
     }
     return this_type;
@@ -1041,13 +1101,18 @@ enum type factor(bool *fsys, int *ptx, int lev) {
                             getsym();
                             break;
                         case variable:
+                        case argument:
                             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
                             this_type = var(nxtlev, ptx, lev);
                             gen(table[i].size ? ldx : lod, lev - table[i].level, table[i].adr);
                             break;
-                        case procedure:
-                            error(21);
-                            getsym();
+                        case function:
+                            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+                            gen(lit, 0, 0);
+                            func(nxtlev, ptx, lev);
+                            this_type = table[i].type;
+                            printf("this_type = %d\n", this_type);
+                            gen(cal, lev - table[i].level, table[i].adr);
                             break;
                     }
                 }
@@ -1080,6 +1145,25 @@ enum type factor(bool *fsys, int *ptx, int lev) {
     return this_type;
 }
 
+void func(bool *fsys, int *ptx, int lev) {
+    bool nxtlev[SYM_CNT];
+
+    int argc = 0;
+    getsym();
+    if (sym == lparen) {
+        do {
+            getsym();
+            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+            nxtlev[comma] = true;
+            nxtlev[rparen] = true;
+            clause_or(nxtlev, ptx, lev);
+            argc += 1;
+        } while (sym == comma);
+        if (sym == rparen) getsym();
+        else error(705);
+    }
+    gen(lit, 0, argc + 1);
+}
 
 void dump_stack(int *s, int t) {
     printf("t = %d\n", t);
@@ -1093,10 +1177,37 @@ void runtime_error(int error_code) {
     exit(6);
 }
 
+void dump_stacks_to_files(const void *sp, const enum type *st, int c, int p, int t) {
+    char fname[80];
+    sprintf(fname, "fstack/c%d-p%d", c, p);
+    printf("%s\n", fname);
+    fflush(NULL);
+    FILE* fp = fopen(fname, "w");
+    if (!fp) exit(20);
+    for (int x = 0; x <= t; x++) {
+        printf("%d\n", x);
+        switch (st[x]) {
+            case int_:
+            case bool_:
+            case char_:
+                fprintf(fp, "%d\n", *((int*)sp + x));
+                break;
+            case float_:
+                fprintf(fp, "%f\n", *((float*)sp + x));
+                break;
+            case void_:
+                break;
+        }
+    }
+    fflush(NULL);
+    fclose(fp);
+}
+
 void interpret(bool step_mode) {
     int p = 0;
     int b = 1;
     int t = 0;
+    int cnt = 0;
     char buffer[6];
     struct instruction i;
     union {
@@ -1123,11 +1234,13 @@ void interpret(bool step_mode) {
     sigaddset(&set, SIGCONT);
 
     do {
-        // printf("p = %d\n", p);
+        // printf("p = %d, t = %d\n", p, t);
         // fflush(NULL);
         i = code[p];
         // printf("after code %s %d %d\n", mnemonic[code[p].f], code[p].l, code[p].a);
+        // dump_stacks_to_files(s.p, st, cnt, p, t);
         p++;
+        cnt++;
 
         if (step_mode) {
             // pause();
@@ -1155,7 +1268,7 @@ void interpret(bool step_mode) {
                 s.i[t] = i.a;
                 break;
             case opr:
-                if (i.l) {
+                if (i.l && i.a != op_write) {
                     st[t - 1] = float_;
                     op1.f = (i.l & 0x1) ? s.f[t - 1] : (float)s.i[t - 1];
                     op2.f = (i.l & 0x2) ? s.f[t] : (float)s.i[t];
@@ -1165,9 +1278,9 @@ void interpret(bool step_mode) {
                 }
                 switch (i.a) {
                     case op_ret:
-                        t = b - 1;
-                        p = s.i[t + 3];
-                        b = s.i[t + 2];
+                        t = b - 1 - s.i[b - 1];
+                        p = s.i[b - 1 + 3];
+                        b = s.i[b - 1 + 2];
                         break;
                     case op_rev:
                         if (i.l) s.f[t] = -s.f[t]; else s.i[t] = -s.i[t];
@@ -1344,7 +1457,6 @@ void interpret(bool step_mode) {
                 t -= 1;
                 break;
         }
-        // dump_stack(s.i, t);
     } while (p != 0);
     printf("end pl0\n");
     fprintf(fresult, "end pl0\n");

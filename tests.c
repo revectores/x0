@@ -70,11 +70,11 @@ int run_tests() {
     run_test("expression");
 
     run_test("for");
-    run_test("proc");
+    run_test("func");
 
     run_test("primes");
     run_test("lcm");
-    run_test("pi");
+//    run_test("pi");
     return 0;
 }
 
