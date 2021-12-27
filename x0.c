@@ -30,7 +30,7 @@ void dump_sym() {
     printf("current sym: %s\n", symbol_words[sym]);
 }
 
-int compile_and_run(char *source, char *path, bool step_mode) {
+int compile_and_run(const char *source, const char *path, bool step_mode) {
     char fname[200];
     bool nxtlev[SYM_CNT];
 

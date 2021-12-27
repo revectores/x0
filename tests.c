@@ -71,6 +71,10 @@ int run_tests() {
 
     run_test("for");
     run_test("proc");
+
+    run_test("primes");
+    run_test("lcm");
+    run_test("pi");
     return 0;
 }
 
