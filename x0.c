@@ -594,6 +594,7 @@ void enter(enum object k, int *ptx, int lev, int *pdx) {
             table[*ptx].type = type;
             table[*ptx].size = size;
             *pdx += size ? size : 1;
+            if (size) table[*ptx].obj = (void*)aop;
             break;
         case function:
             table[*ptx].level = lev;
@@ -644,18 +645,25 @@ void const_decl(int *ptx, int lev, int *pdx) {
 void var_decl(int *ptx, int lev, int *pdx) {
     if (sym == ident) {
         getsym();
-        if (sym == lbracket) {
+        size = 0;
+        aop = (struct array_obj*)calloc(1, sizeof(struct array_obj));
+        int d = 0;
+        while (sym == lbracket) {
             getsym();
             if (sym == number_integer) {
-                size = num.i;
+                aop->dn[d++] = num.i;
+                if (!size) size = num.i; else size *= num.i;
                 getsym();
                 if (sym == rbracket) {
                     getsym();
-                }
-                else error(303);
+                } else error(303);
             } else error(2);
-        } else {
-            size = 0;
+            if (d >= NDIMENSION - 1) error(999);
+        }
+        if (size) {
+            d -= 1;
+            aop->mags[d] = 1;
+            while (d--) aop->mags[d] = aop->mags[d + 1] * aop->dn[d + 1];
         }
         enter(variable, ptx, lev, pdx);
 
@@ -870,21 +878,24 @@ enum type var(bool *fsys, int *ptx, int lev) {
     int i = position(id, *ptx);
     enum type this_type = table[i].type;
     getsym();
-    if (sym == lbracket) {
-        if (table[i].size) {
-            getsym();
-            memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
-            nxtlev[rparen] = true;
-            nxtlev[rbracket] = true;
-            enum type t = clause_or(nxtlev, ptx, lev);
-            if (t == float_) error(600);
-            // TODO: Implement bounds checking here.
-            //  Throw a runtime error if the bounds checking failed.
-            if (sym == rbracket) getsym();
-            else error(303);
-        } else error(500);
-    } else {
-        if (table[i].size) error(501);
+    if (table[i].size && sym != lbracket) error(501);
+    if (!table[i].size && sym == lbracket) error(502);
+    int d = 0;
+    while (sym == lbracket) {
+        getsym();
+        memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
+        nxtlev[rparen] = true;
+        nxtlev[rbracket] = true;
+        enum type t = clause_or(nxtlev, ptx, lev);
+        if (t == float_) error(600);
+        // TODO: Implement bounds checking here.
+        //  Throw a runtime error if the bounds checking failed.
+        if (sym == rbracket) getsym();
+        else error(303);
+        gen(lit, 0, ((struct array_obj*)table[i].obj)->mags[d]);
+        gen(opr, 0, op_mul);
+        if (d != 0) gen(opr, 0, op_add);
+        d++;
     }
     return this_type;
 }

@@ -16,6 +16,7 @@
 #define MAX_CX 200
 #define STACK_SIZE 500
 #define LINE_WIDTH 200
+#define NDIMENSION 10
 
 enum symbol {
     nul,       ident,      number_integer,   plus,      minus,
@@ -99,7 +100,13 @@ struct table_struct {
     int level;
     int adr;
     int size;
+    void* obj;
 };
+
+struct array_obj {
+    int dn[NDIMENSION];
+    int mags[NDIMENSION];
+} *aop;
 
 struct table_struct table[TXMAX];
 

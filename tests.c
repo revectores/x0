@@ -74,7 +74,10 @@ int run_tests() {
 
     run_test("primes");
     run_test("lcm");
-//    run_test("pi");
+    run_test("pi");
+    run_test("factorial");
+    run_test("mmul");
+
     return 0;
 }
 
