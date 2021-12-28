@@ -282,7 +282,7 @@ void getsym(){
     int i, j, k;
 
     while (ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t') getch();
-    if (('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z')) {
+    if (('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || (ch == '_')) {
         k = 0;
         do {
             if (k < AL) {
@@ -290,7 +290,7 @@ void getsym(){
                 k++;
             }
             getch();
-        } while (('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ('0' <= ch && ch <= '9'));
+        } while (('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || ('0' <= ch && ch <= '9') || (ch == '_'));
         A[k] = 0;
         strcpy(id, A);
         i = 0;

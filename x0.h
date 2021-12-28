@@ -9,7 +9,7 @@
 #define NROW 15
 #define TXMAX 100
 #define NMAX 14
-#define AL 10
+#define AL 64
 #define MAXERR 30
 #define MAX_ADDR 2048
 #define MAX_LEVEL 3
