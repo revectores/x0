@@ -15,7 +15,7 @@ char symbol_words[SYM_CNT][10] = {
         "var_sym",   "func_sym",   "main_sym",  "type_sym",  "lbracket",
         "rbracket",  "else_sym",   "mod",       "not_sym",   "lor",
         "land",      "bor",        "band",      "bxor",      "for_sym",
-        "arrow",     "return_sym", "true_",     "false_",
+        "arrow",     "return_sym", "true_",     "false_",    "number_float",
 };
 
 char type_word[NTYPE][10] = {
@@ -216,7 +216,8 @@ void init(){
     statbegsys[for_sym]   = true;
 
     factbegsys[ident]  = true;
-    factbegsys[number] = true;
+    factbegsys[number_integer] = true;
+    factbegsys[number_float]   = true;
     factbegsys[true_]  = true;
     factbegsys[false_] = true;
     factbegsys[lparen] = true;
@@ -325,13 +326,24 @@ void getsym(){
         }
     } else if (ch >= '0' && ch <= '9') {
         k = 0;
-        num = 0;
-        sym = number;
+        num.i = 0;
+        sym = number_integer;
         do {
-            num = 10 * num + ch - '0';
+            num.i = 10 * num.i + ch - '0';
             k++;
             getch();
         } while (ch >= '0' && ch <= '9');
+        if (ch == '.') {
+            sym = number_float;
+            num.f = (float)num.i;
+            int p = 10;
+            getch();
+            do {
+                num.f += (float)(ch - '0') / (float)p;
+                p *= 10;
+                getch();
+            } while (ch >= '0' && ch <= '9');
+        }
         k--;
         if (k > NMAX) error(30);
     } else if (ch == '=') {
@@ -409,10 +421,10 @@ void gen(enum fct f, int l, int a) {
         exit(4);
     }
 
-    if (a >= MAX_ADDR) {
-        printf("address overflow\n");
-        exit(5);
-    }
+//    if (a >= MAX_ADDR) {
+//        printf("address overflow\n");
+//        exit(5);
+//    }
     code[cx].f = f;
     code[cx].l = l;
     code[cx].a = a;
@@ -568,11 +580,11 @@ void enter(enum object k, int *ptx, int lev, int *pdx) {
     table[*ptx].kind = k;
     switch (k) {
         case constant:
-            if (num > MAX_ADDR) {
+            if (num.i > MAX_ADDR) {
                 error(31);
-                num = 0;
+                num.i = 0;
             }
-            table[*ptx].val = num;
+            table[*ptx].val = num.i;
             table[*ptx].type = type;
             table[*ptx].size = 0;
             break;
@@ -615,7 +627,7 @@ void const_decl(int *ptx, int lev, int *pdx) {
         getsym();
         if (sym == becomes) {
             getsym();
-            if (sym == number) {
+            if (sym == number_integer) {
                 enter(constant, ptx, lev, pdx);
                 getsym();
             } else {
@@ -634,8 +646,8 @@ void var_decl(int *ptx, int lev, int *pdx) {
         getsym();
         if (sym == lbracket) {
             getsym();
-            if (sym == number) {
-                size = num;
+            if (sym == number_integer) {
+                size = num.i;
                 getsym();
                 if (sym == rbracket) {
                     getsym();
@@ -1059,7 +1071,8 @@ enum type unary(bool *fsys, int *ptx, int lev) {
 
     switch (sym) {
         case ident:
-        case number:
+        case number_integer:
+        case number_float:
         case lparen:
         case true_:
         case false_:
@@ -1124,13 +1137,18 @@ enum type factor(bool *fsys, int *ptx, int lev) {
                     }
                 }
                 break;
-            case number:
-                if (num > MAX_ADDR) {
+            case number_integer:
+                if (num.i > MAX_ADDR) {
                     error(31);
-                    num = 0;
+                    num.i = 0;
                 }
-                gen(lit, 0, num);
+                gen(lit, 0, num.i);
                 this_type = int_;
+                getsym();
+                break;
+            case number_float:
+                gen(lit, 1, num.i);
+                this_type = float_;
                 getsym();
                 break;
             case true_:
@@ -1279,6 +1297,7 @@ void interpret(bool step_mode) {
             case lit:
                 t++;
                 s.i[t] = i.a;
+                if (i.l) st[t] = float_;
                 break;
             case opr:
                 if (i.l && i.a != op_write) {

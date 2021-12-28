@@ -18,7 +18,7 @@
 #define LINE_WIDTH 200
 
 enum symbol {
-    nul,       ident,      number,    plus,      minus,
+    nul,       ident,      number_integer,   plus,      minus,
     times,     slash,      odd_sym,   eql,       neq,
     lss,       geq,        gtr,       leq,       lparen,
     rparen,    comma,      semicolon, period,    becomes,
@@ -27,9 +27,9 @@ enum symbol {
     var_sym,   func_sym,   main_sym,  type_sym,  lbracket,
     rbracket,  else_sym,   mod,       not_sym,   lor,
     land,      bor,        band,      bxor,      for_sym,
-    arrow,     return_sym, true_,  false_,
+    arrow,     return_sym, true_,     false_,    number_float
 };
-#define SYM_CNT 49
+#define SYM_CNT 50
 
 enum object {
     constant, variable, function, argument
@@ -70,7 +70,10 @@ bool table_switch;
 char ch;
 enum symbol sym;
 char id[AL + 1];
-int num;
+union {
+    int i;
+    float f;
+} num;
 int size;
 enum type type;
 int cc, ll;
