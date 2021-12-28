@@ -6,7 +6,7 @@
 #ifndef PL0_GEN_X0_H
 #define PL0_GEN_X0_H
 
-#define NROW 15
+#define NROW 17
 #define TXMAX 100
 #define NMAX 14
 #define AL 64
@@ -18,18 +18,18 @@
 #define LINE_WIDTH 200
 
 enum symbol {
-    nul,       ident,    number,    plus,     minus,
-    times,     slash,    odd_sym,   eql,      neq,
-    lss,       geq,      gtr,       leq,      lparen,
-    rparen,    comma,    semicolon, period,   becomes,
-    begin_sym, end_sym,  if_sym,    then_sym, while_sym,
-    write_sym, read_sym, do_sym,    call_sym, const_sym,
-    var_sym,   func_sym, main_sym,  type_sym, lbracket,
-    rbracket,  else_sym, mod,       not_sym,  lor,
-    land,      bor,      band,      bxor,     for_sym,
-    arrow,     return_sym,
+    nul,       ident,      number,    plus,      minus,
+    times,     slash,      odd_sym,   eql,       neq,
+    lss,       geq,        gtr,       leq,       lparen,
+    rparen,    comma,      semicolon, period,    becomes,
+    begin_sym, end_sym,    if_sym,    then_sym,  while_sym,
+    write_sym, read_sym,   do_sym,    call_sym,  const_sym,
+    var_sym,   func_sym,   main_sym,  type_sym,  lbracket,
+    rbracket,  else_sym,   mod,       not_sym,   lor,
+    land,      bor,        band,      bxor,      for_sym,
+    arrow,     return_sym, true_,  false_,
 };
-#define SYM_CNT 47
+#define SYM_CNT 49
 
 enum object {
     constant, variable, function, argument

@@ -6,16 +6,16 @@
 #include "x0.h"
 
 char symbol_words[SYM_CNT][10] = {
-        "nul",       "ident",    "number",    "plus",     "minus",
-        "times",     "slash",    "odd_sym",   "eql",      "neq",
-        "lss",       "geq",      "gtr",       "leq",      "lparen",
-        "rparen",    "comma",    "semicolon", "period",   "becomes",
-        "begin_sym", "end_sym",  "if_sym",    "then_sym", "while_sym",
-        "write_sym", "read_sym", "do_sym",    "call_sym", "const_sym",
-        "var_sym",   "func_sym", "main_sym",  "type_sym", "lbracket",
-        "rbracket",  "else_sym", "mod",       "not_sym",  "lor",
-        "land",      "bor",      "band",      "bxor",     "for_sym",
-        "arrow",     "return_sym"
+        "nul",       "ident",      "number",    "plus",      "minus",
+        "times",     "slash",      "odd_sym",   "eql",       "neq",
+        "lss",       "geq",        "gtr",       "leq",       "lparen",
+        "rparen",    "comma",      "semicolon", "period",    "becomes",
+        "begin_sym", "end_sym",    "if_sym",    "then_sym",  "while_sym",
+        "write_sym", "read_sym",   "do_sym",    "call_sym",  "const_sym",
+        "var_sym",   "func_sym",   "main_sym",  "type_sym",  "lbracket",
+        "rbracket",  "else_sym",   "mod",       "not_sym",   "lor",
+        "land",      "bor",        "band",      "bxor",      "for_sym",
+        "arrow",     "return_sym", "true_",     "false_",
 };
 
 char type_word[NTYPE][10] = {
@@ -153,33 +153,37 @@ void init(){
     strcpy(&(word[1][0]), "const");
     strcpy(&(word[2][0]), "do");
     strcpy(&(word[3][0]), "else");
-    strcpy(&(word[4][0]), "for");
-    strcpy(&(word[5][0]), "func");
-    strcpy(&(word[6][0]), "if");
-    strcpy(&(word[7][0]), "main");
-    strcpy(&(word[8][0]), "odd");
-    strcpy(&(word[9][0]), "read");
-    strcpy(&(word[10][0]), "return");
-    strcpy(&(word[11][0]), "then");
-    strcpy(&(word[12][0]), "var");
-    strcpy(&(word[13][0]), "while");
-    strcpy(&(word[14][0]), "write");
+    strcpy(&(word[4][0]), "false");
+    strcpy(&(word[5][0]), "for");
+    strcpy(&(word[6][0]), "func");
+    strcpy(&(word[7][0]), "if");
+    strcpy(&(word[8][0]), "main");
+    strcpy(&(word[9][0]), "odd");
+    strcpy(&(word[10][0]), "read");
+    strcpy(&(word[11][0]), "return");
+    strcpy(&(word[12][0]), "then");
+    strcpy(&(word[13][0]), "true");
+    strcpy(&(word[14][0]), "var");
+    strcpy(&(word[15][0]), "while");
+    strcpy(&(word[16][0]), "write");
 
     wsym[0] = call_sym;
     wsym[1] = const_sym;
     wsym[2] = do_sym;
     wsym[3] = else_sym;
-    wsym[4] = for_sym;
-    wsym[5] = func_sym;
-    wsym[6] = if_sym;
-    wsym[7] = main_sym;
-    wsym[8] = odd_sym;
-    wsym[9] = read_sym;
-    wsym[10] = return_sym;
-    wsym[11] = then_sym;
-    wsym[12] = var_sym;
-    wsym[13] = while_sym;
-    wsym[14] = write_sym;
+    wsym[4] = false_;
+    wsym[5] = for_sym;
+    wsym[6] = func_sym;
+    wsym[7] = if_sym;
+    wsym[8] = main_sym;
+    wsym[9] = odd_sym;
+    wsym[10] = read_sym;
+    wsym[11] = return_sym;
+    wsym[12] = then_sym;
+    wsym[13] = true_;
+    wsym[14] = var_sym;
+    wsym[15] = while_sym;
+    wsym[16] = write_sym;
 
     strcpy(&(mnemonic[lit][0]), "lit");
     strcpy(&(mnemonic[opr][0]), "opr");
@@ -213,6 +217,8 @@ void init(){
 
     factbegsys[ident]  = true;
     factbegsys[number] = true;
+    factbegsys[true_]  = true;
+    factbegsys[false_] = true;
     factbegsys[lparen] = true;
 }
 
@@ -1055,7 +1061,8 @@ enum type unary(bool *fsys, int *ptx, int lev) {
         case ident:
         case number:
         case lparen:
-        // case return_sym:
+        case true_:
+        case false_:
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             this_type = factor(nxtlev, ptx, lev);
             break;
@@ -1124,6 +1131,12 @@ enum type factor(bool *fsys, int *ptx, int lev) {
                 }
                 gen(lit, 0, num);
                 this_type = int_;
+                getsym();
+                break;
+            case true_:
+            case false_:
+                gen(lit, 0, sym == true_ ? 1 : 0);
+                this_type = bool_;
                 getsym();
                 break;
             case lparen:
