@@ -1,0 +1,11 @@
+main {
+    float ff;
+    int r;
+    func p(int i, bool b) -> float {
+        return i + b;
+    }
+
+    write p(5, 1);
+    r = p(5, 1);
+    write r;
+}

@@ -1,0 +1,12 @@
+main {
+    int x;
+    int y;
+    x = 5;        /* 101 */
+    y = 3;        /* 011 */
+    write x & y;  /* 001 */
+    write x | y;  /* 111 */
+    write x ^ y;  /* 110 */
+    write (x ^ y ^ y) == x;
+}
+
+

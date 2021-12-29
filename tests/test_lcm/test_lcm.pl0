@@ -1,0 +1,30 @@
+/* Compute LCM through LCM(a, b) * GCD(a, b) = a * b */
+
+main {
+    int a;
+    int b;
+    int t;
+
+    func gcd(int a, int b) -> int {
+        func swap {
+            t = a;
+            a = b;
+            b = t;
+        }
+        if (a < b) call swap;
+        while (b != 0) {
+            t = b;
+            b = a % b;
+            a = t;
+        }
+        return a;
+    }
+
+    func lcm(int a, int b) -> int {
+        return a * b / gcd(a, b);
+    }
+
+    read a;
+    read b;
+    write lcm(a, b);
+}

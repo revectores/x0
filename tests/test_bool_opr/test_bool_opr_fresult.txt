@@ -1,0 +1,9 @@
+start pl0
+true
+false
+true
+true
+false
+true
+true
+end pl0

@@ -1,0 +1,13 @@
+start pl0
+-0.100000
+0.300000
+-0.100000
+0.020000
+0.500000
+false
+true
+true
+false
+true
+false
+end pl0

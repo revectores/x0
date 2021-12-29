@@ -1,0 +1,15 @@
+/* This file is the unittest case for comment */
+
+main {
+    int x;
+    int y;
+    y = 42;  /* magic number! */
+    x = 2;
+    /* this assignment will be disabled by this 3-line comment!
+    x = x * 3;
+    */ /* Let's do some exciting arithmetic! */
+    write y / x + x * x + x / y;
+    /* y / x + x * x + x / y = 25 since (x, y) = (2, 42) */
+}
+
+/* you won't see me! */

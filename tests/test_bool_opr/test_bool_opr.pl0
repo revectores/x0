@@ -1,0 +1,13 @@
+main {
+    bool b1;
+    bool b2;
+    b1 = true;
+    b2 = false;
+    write b1;
+    write !b1;
+    write !(!b1);
+    write b1 || b2;
+    write b1 && b2;
+    write (true && true || false && false) == ((true && true) || (false && false));
+    write (true && true || false && false) != (true && (true || false) && false);
+}

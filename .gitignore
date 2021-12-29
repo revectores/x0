@@ -2,7 +2,5 @@ cmake-build-debug
 .idea
 .DS_Store
 *.o
-*.pl0
-*.txt
-*.sh
+output
 !CMakeLists.txt

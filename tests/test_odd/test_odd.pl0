@@ -1,0 +1,5 @@
+main {
+    write odd 1;
+    write odd 2;
+    write odd((1 + 2) * 3);
+}

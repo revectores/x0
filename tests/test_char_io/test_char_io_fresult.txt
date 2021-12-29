@@ -1,0 +1,6 @@
+start pl0
+?A
+A
+?a
+a
+end pl0

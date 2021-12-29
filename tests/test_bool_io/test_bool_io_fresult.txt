@@ -1,0 +1,6 @@
+start pl0
+?true
+true
+?false
+false
+end pl0

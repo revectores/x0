@@ -1,0 +1,5 @@
+start pl0
+2
+1
+true
+end pl0

@@ -1,0 +1,26 @@
+/* Sieve of Eratosthenes */
+main {
+    const int NFACTOR = 4;
+    int factors[4];
+    int c;
+    int p;
+
+    func check_prime(int c) -> bool {
+        bool is_prime;
+        is_prime = true;
+        for (p = 0; p < NFACTOR; p = p + 1) {
+            if (c % factors[p] == 0) is_prime = false;
+        }
+        return is_prime;
+    }
+
+    /* TODO: Array initializer */
+    factors[0] = 2;
+    factors[1] = 3;
+    factors[2] = 5;
+    factors[3] = 7;
+    for (p = 0; p < NFACTOR; p = p + 1) write factors[p];
+    for (c = factors[NFACTOR - 1] + 1; c < 100; c = c + 1) {
+        if (check_prime(c)) write c;
+    }
+}

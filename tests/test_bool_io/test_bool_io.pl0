@@ -1,0 +1,7 @@
+main {
+    bool b;
+    read b;
+    write b;
+    read b;
+    write b;
+}

@@ -1,0 +1,33 @@
+main {
+    const int DN = 2;
+    int A[2][2];
+    int B[2][2];
+    int C[2][2];
+    int r;
+    int c;
+    int t;
+
+    A[0][0] = 1;
+    A[0][1] = 0;
+    A[1][0] = 0;
+    A[1][1] = 1;
+
+    B[0][0] = 1;
+    B[0][1] = 2;
+    B[1][0] = 3;
+    B[1][1] = 4;
+
+    for (r = 0; r < DN; r = r + 1) {
+        for (c = 0; c < DN; c = c + 1){
+            C[r][c] = 0;
+            for (t = 0; t < DN; t = t + 1) {
+                C[r][c] = C[r][c] + A[r][t] * B[t][c];
+            }
+        }
+    }
+
+    write C[0][0];
+    write C[0][1];
+    write C[1][0];
+    write C[1][1];
+}

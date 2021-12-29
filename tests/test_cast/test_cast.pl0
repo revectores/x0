@@ -1,0 +1,17 @@
+main {
+    float f;
+    int i;
+    read f;
+    i = f;
+    write i;
+    i = f * 10;
+    write i;
+
+    read i;
+    f = i;
+    write f;
+    f = i / 2;
+    write f;
+    f = i / 4;
+    write f;
+}

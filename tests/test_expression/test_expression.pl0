@@ -1,0 +1,10 @@
+main {
+    int x;
+    int y;
+    x = 3 / 2 + 1 + 0 * (-1);
+    y = (2 >= 1) + (1 > 2);
+    y = y * 2 - 1;
+    write x;
+    write y;
+    write x * 2 == y + 3;
+}

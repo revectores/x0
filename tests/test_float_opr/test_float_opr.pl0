@@ -1,0 +1,17 @@
+main {
+    float f;
+    float g;
+    f = 0.1;
+    g = 0.2;
+    write -f;
+    write f + g;
+    write f - g;
+    write f * g;
+    write f / g;
+    write f == g;
+    write f != g;
+    write f < g;
+    write f > g;
+    write f <= g;
+    write f >= g;
+}

@@ -1,0 +1,27 @@
+main {
+    float pi;
+    float ppi;
+    float epsilon;
+    float sign;
+    int p;
+
+    func abs(float f) -> float {
+        if (f < 0) f = -f;
+        return f;
+    }
+
+    p = 1;
+    sign = 1;
+    pi = 0.0;
+    ppi = -1.0;
+    epsilon = 0.000001;
+
+    while (abs(pi - ppi) >= epsilon) {
+        ppi = pi;
+        pi = pi + sign / p;
+        p = p + 2;
+        sign = -sign;
+    }
+
+    write 4 * pi;
+}

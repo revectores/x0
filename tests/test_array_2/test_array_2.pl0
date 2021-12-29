@@ -1,0 +1,4 @@
+main {
+    int A[5];
+    write A;
+}

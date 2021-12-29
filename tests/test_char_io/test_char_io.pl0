@@ -1,0 +1,7 @@
+main {
+    char c;
+    read c;
+    write c;
+    read c;
+    write c;
+}
