@@ -558,11 +558,7 @@ void block(int lev, int tx, bool *fsys){
     if (sym == return_sym) {
         getsym();
         enum type t = clause_or(nxtlev, &tx, lev);
-        printf("ttttt = %d %d\n", t, table[tx0].type);
-        if (t != float_ && table[tx0].type == float_) {
-            printf("!!!!\n");
-            gen(opr, itof, op_cast);
-        }
+        if (t != float_ && table[tx0].type == float_) gen(opr, itof, op_cast);
         if (t == float_ && table[tx0].type != float_) gen(opr, ftoi, op_cast);
         gen(sto, 0, 0 - 1 - argc - 1);
         getsym();
@@ -1450,7 +1446,7 @@ void interpret(bool step_mode) {
                                 fprintf(fresult, "%c\n", s.i[t]);
                                 break;
                             case io_bool:
-                                scanf("%s.i", buffer);
+                                scanf("%s", buffer);
                                 if (strcmp(buffer, "true") == 0) s.i[t] = 1;
                                 else if (strcmp(buffer, "false") == 0) s.i[t] = 0;
                                 else runtime_error(1);
