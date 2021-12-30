@@ -5,7 +5,7 @@
 #include <signal.h>
 #include "x0.h"
 
-char symbol_words[SYM_CNT][10] = {
+char symbol_words[SYM_CNT][12] = {
         "nul",       "ident",      "number",    "plus",      "minus",
         "times",     "slash",      "odd_sym",   "eql",       "neq",
         "lss",       "geq",        "gtr",       "leq",       "lparen",
@@ -86,14 +86,14 @@ int compile_and_run(const char *source, const char *path, bool step_mode) {
 
     getsym();
     if (sym == main_sym) getsym();
-    else error(300);
+    else error(ERROR_SYNTAX_EXPECT_MAIN);
 
     addset(nxtlev, declbegsys, statbegsys, SYM_CNT);
     nxtlev[end_sym] = true;
 
     block(0, 0, nxtlev);
 
-    if (sym != end_sym) error(9);
+    if (sym != end_sym) error(ERROR_SYNTAX_EXPECT_END);
     if (err == 0) {
         printf("\n===Parsing success!===\n");
         fprintf(fout, "\n===Parsing success!===\n");
@@ -345,7 +345,7 @@ void getsym(){
             } while (ch >= '0' && ch <= '9');
         }
         k--;
-        if (k > NMAX) error(30);
+        if (k > NMAX) error(ERROR_OVERFLOW_INT);
     } else if (ch == '=') {
         getch();
         if (ch == '=') {
@@ -448,43 +448,43 @@ void block(int lev, int tx, bool *fsys){
 
     table[tx].adr = cx;
     gen(jmp, 0, 0);
-    if (lev > MAX_LEVEL) error(32);
+    if (lev > MAX_LEVEL) error(ERROR_OVERFLOW_LEVEL);
 
     table[tx0].type = void_;
     if (sym == lparen) {
         do {
             getsym();
-            if (sym != type_sym) error(703);
+            if (sym != type_sym) error(ERROR_SYNTAX_EXPECT_TYPE);
             getsym();
             arg_decl(&tx, lev, &argc);
             argc += 1;
         } while (sym == comma);
         for (int c = 0; c < argc; c++) table[tx - c].adr -= argc + 1;
-        if (sym == rparen) getsym(); else error(701);
+        if (sym == rparen) getsym(); else error(ERROR_SYNTAX_EXPECT_RPAREN);
     }
     if (sym == arrow) {
         getsym();
         if (sym == type_sym) table[tx0].type = type;
-        else error(703);
+        else error(ERROR_SYNTAX_EXPECT_TYPE);
         getsym();
     }
-    if (sym == begin_sym) getsym(); else error(100);
+    if (sym == begin_sym) getsym(); else error(ERROR_SYNTAX_EXPECT_BEGIN);
 
     do {
         while (sym == const_sym) {
             getsym();
             if (sym == type_sym) getsym();
-            else error(301);
+            else error(ERROR_SYNTAX_EXPECT_TYPE);
             const_decl(&tx, lev, &dx);
             if (sym == semicolon) getsym();
-            else error(5);
+            else error(ERROR_SYNTAX_EXPECT_SEMICOLON);
         }
 
         while (sym == type_sym) {
             getsym();
             var_decl(&tx, lev, &dx);
             if (sym == semicolon) getsym();
-            else error(5);
+            else error(ERROR_SYNTAX_EXPECT_SEMICOLON);
         }
 
         while (sym == func_sym) {
@@ -492,7 +492,7 @@ void block(int lev, int tx, bool *fsys){
             if (sym == ident) {
                 enter(function, &tx, lev, &dx);
                 getsym();
-            } else error(4);
+            } else error(ERROR_SYNTAX_EXPECT_IDENTIFIER);
 
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             block(lev + 1, tx, nxtlev);
@@ -502,15 +502,15 @@ void block(int lev, int tx, bool *fsys){
                 memcpy(nxtlev, statbegsys, sizeof(bool[SYM_CNT]));
                 nxtlev[ident] = true;
                 nxtlev[func_sym] = true;
-                test(nxtlev, fsys, 6);
-            } else error(5);
+                test(nxtlev, fsys, ERROR_SYNTAX);
+            } else error(ERROR_SYNTAX_EXPECT_END);
         }
 
         memcpy(nxtlev, statbegsys, sizeof(bool[SYM_CNT]));
         nxtlev[ident] = true;
         nxtlev[end_sym] = true;
         nxtlev[return_sym] = true;
-        test(nxtlev, declbegsys, 7);
+        test(nxtlev, declbegsys, ERROR_SYNTAX);
     } while (inset(sym, declbegsys));
 
     code[table[tx0].adr].a = cx;
@@ -577,7 +577,7 @@ void enter(enum object k, int *ptx, int lev, int *pdx) {
     switch (k) {
         case constant:
             if (num.i > MAX_ADDR) {
-                error(31);
+                error(ERROR_OVERFLOW_ADDRESS);
                 num.i = 0;
             }
             table[*ptx].val = num.i;
@@ -628,13 +628,13 @@ void const_decl(int *ptx, int lev, int *pdx) {
                 enter(constant, ptx, lev, pdx);
                 getsym();
             } else {
-                error(2);
+                error(ERROR_SYNTAX_EXPECT_NUMBER);
             }
         } else {
-            error(3);
+            error(ERROR_SYNTAX_EXPECT_ASSIGNMENT);
         }
     } else {
-        error(4);
+        error(ERROR_SYNTAX_EXPECT_IDENTIFIER);
     }
 }
 
@@ -652,9 +652,9 @@ void var_decl(int *ptx, int lev, int *pdx) {
                 getsym();
                 if (sym == rbracket) {
                     getsym();
-                } else error(303);
-            } else error(2);
-            if (d >= NDIMENSION - 1) error(999);
+                } else error(ERROR_SYNTAX_EXPECT_RBRACKET);
+            } else error(ERROR_SYNTAX_EXPECT_NUMBER);
+            if (d >= NDIMENSION - 1) error(ERROR_OVERFLOW_DIMENSION);
         }
         if (size) {
             d -= 1;
@@ -664,7 +664,7 @@ void var_decl(int *ptx, int lev, int *pdx) {
         enter(variable, ptx, lev, pdx);
 
     } else {
-        error(4);
+        error(ERROR_SYNTAX_EXPECT_IDENTIFIER);
     }
 }
 
@@ -672,7 +672,7 @@ void arg_decl(int *ptx, int lev, int *argc) {
     if (sym == ident) {
         getsym();
         enter(argument, ptx, lev, argc);
-    } else error(4);
+    } else error(ERROR_SYNTAX_EXPECT_IDENTIFIER);
 }
 
 void list_code(int cx0) {
@@ -703,20 +703,20 @@ void statement(bool *fsys, int *ptx, int lev) {
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             expression(nxtlev, ptx, lev);
             if (sym == semicolon) getsym();
-            else error(5);
+            else error(ERROR_SYNTAX_EXPECT_SEMICOLON);
             break;
         case read_sym:
             getsym();
             if (sym == ident) i = position(id, *ptx);
             else i = 0;
-            if (i == 0) error(35);
+            if (i == 0) error(ERROR_TYPE_UNDEFINED_IDENTIFIER);
             else {
                 gen(opr, table[i].type, op_read);
                 gen(sto, lev - table[i].level, table[i].adr);
             }
             getsym();
             if (sym == semicolon) getsym();
-            else error(5);
+            else error(ERROR_SYNTAX_EXPECT_SEMICOLON);
             break;
         case write_sym:
             getsym();
@@ -725,15 +725,15 @@ void statement(bool *fsys, int *ptx, int lev) {
             gen(opr, t, op_write);
             gen(opr, 0, op_lf);
             if (sym == semicolon) getsym();
-            else error(5);
+            else error(ERROR_SYNTAX_EXPECT_SEMICOLON);
             break;
         case call_sym:
             getsym();
-            if (sym != ident) error(14);
+            if (sym != ident) error(ERROR_SYNTAX_EXPECT_IDENTIFIER);
             else {
                 i = position(id, *ptx);
 
-                if (i == 0) error(11);
+                if (i == 0) error(ERROR_TYPE_UNDEFINED_IDENTIFIER);
                 else {
                     if (table[i].kind == function) {
                         memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
@@ -741,22 +741,22 @@ void statement(bool *fsys, int *ptx, int lev) {
                         func(nxtlev, ptx, lev);
                         gen(cal, lev - table[i].level, table[i].adr);
                     }
-                    else error(15);
+                    else error(ERROR_TYPE_UNDEFINED_IDENTIFIER);
                 }
                 if (sym == semicolon) getsym();
-                else error(5);
+                else error(ERROR_SYNTAX_EXPECT_SEMICOLON);
             }
             break;
         case if_sym:
             getsym();
             if (sym == lparen) getsym();
-            else error(50);
+            else error(ERROR_SYNTAX_EXPECT_LPAREN);
 
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             nxtlev[rparen] = true;
             clause_or(nxtlev, ptx, lev);
 
-            if (sym == rparen) getsym(); else error(51);
+            if (sym == rparen) getsym(); else error(ERROR_SYNTAX_EXPECT_RPAREN);
             cx1 = cx;
             gen(jpc, 0, 0);
 
@@ -786,18 +786,18 @@ void statement(bool *fsys, int *ptx, int lev) {
                 statement(nxtlev, ptx, lev);
             }
             if (sym == end_sym) getsym();
-            else error(17);
+            else error(ERROR_SYNTAX_EXPECT_END);
             break;
         case while_sym:
             cx1 = cx;
             getsym();
             if (sym == lparen) getsym();
-            else error(50);
+            else error(ERROR_SYNTAX_EXPECT_LPAREN);
 
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             nxtlev[rparen] = true;
             clause_or(nxtlev, ptx, lev);
-            if (sym == rparen) getsym(); else error(51);
+            if (sym == rparen) getsym(); else error(ERROR_SYNTAX_EXPECT_RPAREN);
             cx2 = cx;
             gen(jpc, 0, 0);
 
@@ -808,15 +808,15 @@ void statement(bool *fsys, int *ptx, int lev) {
         case for_sym:
             getsym();
             if (sym == lparen) getsym();
-            else error(50);
+            else error(ERROR_SYNTAX_EXPECT_LPAREN);
 
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             nxtlev[semicolon] = true;
             expression(nxtlev, ptx, lev);
             cx1 = cx;
-            if (sym == semicolon) getsym(); else error(5);
+            if (sym == semicolon) getsym(); else error(ERROR_SYNTAX_EXPECT_SEMICOLON);
             clause_or(nxtlev, ptx, lev);
-            if (sym == semicolon) getsym(); else error(5);
+            if (sym == semicolon) getsym(); else error(ERROR_SYNTAX_EXPECT_SEMICOLON);
             cx2 = cx;
             gen(jpc, 0, 0);
             cx3 = cx;
@@ -826,7 +826,7 @@ void statement(bool *fsys, int *ptx, int lev) {
             cx4 = cx;
             expression(nxtlev, ptx, lev);
             gen(jmp, 0, cx1);
-            if (sym == rparen) getsym(); else error(51);
+            if (sym == rparen) getsym(); else error(ERROR_SYNTAX_EXPECT_RPAREN);
 
             code[cx3].a = cx;
             statement(fsys, ptx, lev);
@@ -846,10 +846,10 @@ enum type expression(bool* fsys, int *ptx, int lev) {
     bool nxtlev[SYM_CNT];
     int i = position(id, *ptx);
 
-    if (i == 0) error(11);
+    if (i == 0) error(ERROR_TYPE_UNDEFINED_IDENTIFIER);
     else {
         if (table[i].kind != variable && table[i].kind != argument) {
-            error(12);
+            error(ERROR_SYNTAX_EXPECT_VARIABLE);
             i = 0;
         } else {
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
@@ -863,7 +863,7 @@ enum type expression(bool* fsys, int *ptx, int lev) {
                 if (this_type == float_ && t != float_) gen(opr, itof, op_cast);
                 if (this_type != float_ && t == float_) gen(opr, ftoi, op_cast);
                 gen(table[i].size ? stx : sto, lev - table[i].level, table[i].adr);
-            } else error(17);
+            } else error(ERROR_SYNTAX_EXPECT_ASSIGNMENT);
         }
     }
     return this_type;
@@ -874,8 +874,8 @@ enum type var(bool *fsys, int *ptx, int lev) {
     int i = position(id, *ptx);
     enum type this_type = table[i].type;
     getsym();
-    if (table[i].size && sym != lbracket) error(501);
-    if (!table[i].size && sym == lbracket) error(502);
+    if (table[i].size && sym != lbracket) error(ERROR_TYPE_IS_ARRAY);
+    if (!table[i].size && sym == lbracket) error(ERROR_TYPE_NOT_ARRAY);
     int d = 0;
     while (sym == lbracket) {
         getsym();
@@ -883,11 +883,11 @@ enum type var(bool *fsys, int *ptx, int lev) {
         nxtlev[rparen] = true;
         nxtlev[rbracket] = true;
         enum type t = clause_or(nxtlev, ptx, lev);
-        if (t == float_) error(600);
+        if (t == float_) error(ERROR_TYPE_EXPECT_INT);
         // TODO: Implement bounds checking here.
         //  Throw a runtime error if the bounds checking failed.
         if (sym == rbracket) getsym();
-        else error(303);
+        else error(ERROR_SYNTAX_EXPECT_RBRACKET);
         gen(lit, 0, ((struct array_obj*)table[i].obj)->mags[d]);
         gen(opr, 0, op_mul);
         if (d != 0) gen(opr, 0, op_add);
@@ -933,7 +933,7 @@ enum type bitwise_or(bool *fsys, int *ptx, int lev){
     nxtlev[bor] = true;
     this_type = bitwise_xor(nxtlev, ptx, lev);
     while (sym == bor) {
-        if (this_type == float_) error(601);
+        if (this_type == float_) error(ERROR_TYPE_EXPECT_INT);
         getsym();
         enum type t = bitwise_xor(nxtlev, ptx, lev);
         this_type = upcast(this_type, t);
@@ -949,7 +949,7 @@ enum type bitwise_xor(bool *fsys, int *ptx, int lev){
     nxtlev[bxor] = true;
     this_type = bitwise_and(nxtlev, ptx, lev);
     while (sym == bxor) {
-        if (this_type == float_) error(601);
+        if (this_type == float_) error(ERROR_TYPE_EXPECT_INT);
         getsym();
         enum type t = bitwise_and(nxtlev, ptx, lev);
         this_type = upcast(this_type, t);
@@ -965,7 +965,7 @@ enum type bitwise_and(bool *fsys, int *ptx, int lev){
     nxtlev[band] = true;
     this_type = simple_expr(nxtlev, ptx, lev);
     while (sym == band) {
-        if (this_type == float_) error(601);
+        if (this_type == float_) error(ERROR_TYPE_EXPECT_INT);
         getsym();
         enum type t = simple_expr(nxtlev, ptx, lev);
         this_type = upcast(this_type, t);
@@ -1065,7 +1065,7 @@ enum type term(bool *fsys, int *ptx, int lev) {
                 gen(opr, type_mask, op_mod);
                 break;
             default:
-                error(404);
+                error(ERROR_UNKNOWN_SYMBOL);
                 break;
         }
     }
@@ -1091,7 +1091,7 @@ enum type unary(bool *fsys, int *ptx, int lev) {
             gen(lit, 0, 1);
             memcpy(nxtlev, fsys, sizeof(bool[SYM_CNT]));
             enum type t = factor(nxtlev, ptx, lev);
-            if (t != bool_) error(300);
+            if (t != bool_) error(ERROR_TYPE_EXPECT_BOOL);
             this_type = t;
             gen(opr, 0, op_sub);
             break;
@@ -1103,7 +1103,7 @@ enum type unary(bool *fsys, int *ptx, int lev) {
             this_type = bool_;
             break;
         default:
-            error(355);
+            error(ERROR_UNKNOWN_SYMBOL);
             break;
     }
     return this_type;
@@ -1119,7 +1119,7 @@ enum type factor(bool *fsys, int *ptx, int lev) {
         switch (sym) {
             case ident:
                 i = position(id, *ptx);
-                if (i == 0) error(11);
+                if (i == 0) error(ERROR_TYPE_UNDEFINED_IDENTIFIER);
                 else {
                     switch (table[i].kind) {
                         case constant:
@@ -1146,7 +1146,7 @@ enum type factor(bool *fsys, int *ptx, int lev) {
                 break;
             case number_integer:
                 if (num.i > MAX_ADDR) {
-                    error(31);
+                    error(ERROR_OVERFLOW_ADDRESS);
                     num.i = 0;
                 }
                 gen(lit, 0, num.i);
@@ -1170,7 +1170,7 @@ enum type factor(bool *fsys, int *ptx, int lev) {
                 nxtlev[rparen] = true;
                 this_type = clause_or(nxtlev, ptx, lev);
                 if (sym == rparen) getsym();
-                else error(22);
+                else error(ERROR_SYNTAX_EXPECT_RPAREN);
                 break;
             default:
                 break;
@@ -1178,7 +1178,7 @@ enum type factor(bool *fsys, int *ptx, int lev) {
 
         memset(nxtlev, 0, sizeof(bool[SYM_CNT]));
         nxtlev[lparen] = true;
-        test(fsys, nxtlev, 23);
+        test(fsys, nxtlev, ERROR_SYNTAX);
     }
     return this_type;
 }
@@ -1198,7 +1198,7 @@ void func(bool *fsys, int *ptx, int lev) {
             argc += 1;
         } while (sym == comma);
         if (sym == rparen) getsym();
-        else error(705);
+        else error(ERROR_SYNTAX_EXPECT_RPAREN);
     }
     gen(lit, 0, argc + 1);
 }
@@ -1345,7 +1345,7 @@ void interpret(bool step_mode) {
                         break;
                     case op_mod:
                         t--;
-                        if (i.l) runtime_error(2); else s.i[t] = op1.i % op2.i;
+                        if (i.l) runtime_error(INVALID_OPERAND); else s.i[t] = op1.i % op2.i;
                         break;
                     case op_eq:
                         t--;
@@ -1402,7 +1402,7 @@ void interpret(bool step_mode) {
                                 s.i[t] = (int)s.f[t];
                                 break;
                             default:
-                                runtime_error(3);
+                                runtime_error(UNKNOWN_OPERATOR);
                                 break;
                         }
                         break;
@@ -1449,7 +1449,7 @@ void interpret(bool step_mode) {
                                 scanf("%s", buffer);
                                 if (strcmp(buffer, "true") == 0) s.i[t] = 1;
                                 else if (strcmp(buffer, "false") == 0) s.i[t] = 0;
-                                else runtime_error(1);
+                                else runtime_error(INVALID_INPUT);
                                 fprintf(fresult, "%s\n", s.i[t] ? "true" : "false");
                                 break;
                             case io_float:

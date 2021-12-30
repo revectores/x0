@@ -1,6 +1,6 @@
 0 main {
 1     int A[5];
 1     write A;
-             ^ 501
+             ^ 204
 5 }
 ===1 errors in PL/0 program!===
