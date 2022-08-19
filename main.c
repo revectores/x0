@@ -4,7 +4,7 @@
 
 int main(int argc, char *argv[]){
     if (argc != 4) {
-        fprintf(stderr, "usage: ./x0 [source] [output_path] [mode]");
+        fprintf(stderr, "usage: ./x0 [source] [output_path] [mode]\n");
         exit(1);
     }
     return compile_and_run(argv[1], argv[2], !strcmp(argv[3], "1"));
