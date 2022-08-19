@@ -1,0 +1,5 @@
+#!/bin/sh
+cmake CMakeLists.txt -B build
+cd build
+make x0_test
+./x0_test
